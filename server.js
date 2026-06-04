@@ -290,24 +290,67 @@ app.get('/api/my-properties/:email', (req, res) => {
     });
 });
 
-// ==================== MESSAGES (Chat) ====================
+// ============ CHAT ENDPOINTS ============
 
+// Get all conversations for a user
+app.get('/api/conversations/:email', (req, res) => {
+    const email = req.params.email;
+    db.all(`
+        SELECT DISTINCT 
+            CASE 
+                WHEN sender = ? THEN receiver 
+                ELSE sender 
+            END as other_user,
+            MAX(created_at) as last_message_time,
+            (SELECT message FROM messages m2 WHERE (m2.sender = ? AND m2.receiver = other_user) OR (m2.sender = other_user AND m2.receiver = ?) ORDER BY created_at DESC LIMIT 1) as last_message
+        FROM messages 
+        WHERE sender = ? OR receiver = ?
+        GROUP BY other_user
+        ORDER BY last_message_time DESC
+    `, [email, email, email, email, email], (err, conversations) => {
+        if (err) return res.json({ success: false, conversations: [] });
+        res.json({ success: true, conversations: conversations || [] });
+    });
+});
+
+// Get messages between two users
 app.get('/api/messages/:user1/:user2', (req, res) => {
     const user1 = req.params.user1;
     const user2 = req.params.user2;
-    db.all(`SELECT * FROM messages WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY created_at ASC`,
-        [user1, user2, user2, user1], (err, rows) => {
-            res.json({ success: true, messages: rows || [] });
-        });
+    db.all(`
+        SELECT * FROM messages 
+        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+        ORDER BY created_at ASC
+    `, [user1, user2, user2, user1], (err, messages) => {
+        if (err) return res.json({ success: false, messages: [] });
+        res.json({ success: true, messages: messages || [] });
+    });
 });
 
+// Send a message
 app.post('/api/messages', (req, res) => {
     const { sender, receiver, message, propertyId } = req.body;
-    db.run('INSERT INTO messages (sender, receiver, message, property_id) VALUES (?, ?, ?, ?)',
-        [sender, receiver, message, propertyId || null], function(err) {
-            if (err) return res.json({ success: false, message: 'Failed to send' });
-            res.json({ success: true, message: 'Sent', id: this.lastID });
-        });
+    if (!sender || !receiver || !message) {
+        return res.json({ success: false, message: 'Missing required fields' });
+    }
+    db.run(`
+        INSERT INTO messages (sender, receiver, message, property_id, created_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+    `, [sender, receiver, message, propertyId || null], function(err) {
+        if (err) return res.json({ success: false, message: 'Failed to send message' });
+        res.json({ success: true, message: 'Message sent', messageId: this.lastID });
+    });
+});
+
+// Mark messages as read
+app.post('/api/messages/read', (req, res) => {
+    const { currentUser, otherUser } = req.body;
+    db.run(`
+        UPDATE messages SET is_read = 1 
+        WHERE sender = ? AND receiver = ? AND is_read = 0
+    `, [otherUser, currentUser], function(err) {
+        res.json({ success: true });
+    });
 });
 
 // ==================== REQUESTS ====================
