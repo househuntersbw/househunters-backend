@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Messages — HouseHunters</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="global.js"></script>
+</head>
+<body>
+  <div class="app chat-app">
+    <div class="chat-panel">
+      <header class="chat-header">
+        <div class="brand">
+          <div class="logo"><i class="fa-solid fa-comments"></i></div>
+          <div>
+            <h1>Messages</h1>
+            <p class="muted small">All conversations</p>
+          </div>
+        </div>
+      </header>
+
+      <div id="chatListView" class="chat-list" aria-live="polite"></div>
+    </div>
+
+    <div id="conversationView" class="conversation">
+      <header class="chat-header convo-header">
+        <button id="backBtn" class="icon-btn"><i class="fa-solid fa-arrow-left"></i></button>
+        <div id="chatAvatar" class="avatar">AA</div>
+        <div class="info">
+          <h3 id="chatName">Conversation</h3>
+          <p id="chatStatus" class="muted small">Online</p>
+        </div>
+      </header>
+
+      <div id="messages" class="messages"></div>
+
+      <div class="chat-input-container">
+        <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" />
+        <button id="sendBtn" class="btn primary"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+  <a href="#" class="nav-item nav-home" onclick="goHome(); return false;">
+    <i class="fa-solid fa-house"></i><span>Home</span>
+  </a>
+  <a href="chat.html" class="nav-item">
+    <i class="fa-solid fa-comments"></i><span>Chat</span>
+  </a>
+  <a href="settings.html" class="nav-item">
+    <i class="fa-solid fa-cog"></i><span>Manage</span>
+  </a>
+  <a href="#" class="nav-item" onclick="logout(); return false;">
+    <i class="fa-solid fa-right-from-bracket"></i><span>Logout</span>
+  </a>
+</nav>
+
+  <script src="script.js" defer></script>
+
+  <script>
+    // fallback chatPageInit if not defined in script.js
+    if (typeof chatPageInit === 'undefined') {
+      function chatPageInit() {
+        const chatList = document.getElementById('chatListView');
+        const messages = document.getElementById('messages');
+        const convo = document.getElementById('conversationView');
+        convo.classList.remove('active');
+
+        // demo conversations
+        const demos = [
+          { id: 'u1', name: 'Lebo M.', preview: 'Is the house still available?', online: true },
+          { id: 'u2', name: 'Sarah K.', preview: 'Sent you new listings', online: false }
+        ];
+
+        chatList.innerHTML = '';
+        demos.forEach(d => {
+          const item = document.createElement('div');
+          item.className = 'chat-item';
+          item.innerHTML = `
+            <div class="avatar">${d.name.split(' ').map(n=>n[0]).slice(0,2).join('')}</div>
+            <div class="preview"><h4>${d.name}</h4><p>${d.preview}</p></div>
+            <div class="meta">${d.online ? '<span class="online-dot"></span>' : ''}</div>
+          `;
+          item.addEventListener('click', () => openConversation(d));
+          chatList.appendChild(item);
+        });
+
+        function openConversation(user) {
+          document.getElementById('chatName').textContent = user.name;
+          document.getElementById('chatAvatar').textContent = user.name.split(' ').map(n=>n[0]).slice(0,2).join('');
+          messages.innerHTML = '';
+          // demo messages
+          const m1 = document.createElement('div'); m1.className='message received'; m1.innerHTML='<div class="bubble">Hello — demo message</div>';
+          const m2 = document.createElement('div'); m2.className='message sent'; m2.innerHTML='<div class="bubble">Thanks — demo reply</div>';
+          messages.appendChild(m1); messages.appendChild(m2);
+          convo.classList.add('active');
+        }
+
+        // back button
+        document.getElementById('backBtn').addEventListener('click', () => {
+          convo.classList.remove('active');
+        });
+
+        // sending demo
+        document.getElementById('sendBtn').addEventListener('click', () => {
+          const txt = document.getElementById('msgInput').value.trim();
+          if(!txt) return;
+          const el = document.createElement('div');
+          el.className = 'message sent'; el.innerHTML = `<div class="bubble">${txt}</div>`;
+          messages.appendChild(el);
+          document.getElementById('msgInput').value = '';
+          messages.scrollTop = messages.scrollHeight;
+        });
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', chatPageInit);
+  </script>
+  <script src="js/nav.js"></script>
+  <script>
+// js/nav.js - Smart Home Navigation
+// Include this file in all pages that have the bottom navigation
+
+function goHome() {
+  const userRole = localStorage.getItem('userRole');
+  const isVerified = localStorage.getItem('verified');
+  const userEmail = localStorage.getItem('userEmail');
+  
+  // If user is logged in and verified, redirect to role-specific dashboard
+  if (userEmail && isVerified === 'true') {
+    switch (userRole) {
+      case 'buyer':
+        window.location.href = 'buyer.html';
+        break;
+      case 'seller':
+        window.location.href = 'seller.html';
+        break;
+      case 'agent':
+        window.location.href = 'agent.html';
+        break;
+      default:
+        window.location.href = 'index.html';
+    }
+  } else {
+    // Not logged in or not verified, go to landing page
+    window.location.href = 'index.html';
+  }
+}
+
+// Attach to all home buttons when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  const homeButtons = document.querySelectorAll('.nav-home, .home-btn, [data-home-btn]');
+  homeButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      goHome();
+    });
+  });
+});
+</script>
+</body>
+</html>
