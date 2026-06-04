@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (HTML, CSS, JS, images) from current directory
+// Serve static files (HTML, CSS, JS,req.params.email images) from current directory
 app.use(express.static('.'));
 
 // Create uploads folder for property images
