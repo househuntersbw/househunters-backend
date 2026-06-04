@@ -411,16 +411,6 @@ app.get('/api/profile/:email/picture', (req, res) => {
         res.json({ success: true, imageUrl: user.profile_picture });
     });
 });
-// ==================== HEALTH & ROOT ====================
-
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'HouseHunters API running' });
-});
-
-// Serve index.html for root path
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
 
 // Delete account
 app.delete('/api/profile/:email', (req, res) => {
@@ -436,6 +426,18 @@ app.delete('/api/profile/:email', (req, res) => {
         if (err) return res.json({ success: false, message: 'Delete failed' });
         res.json({ success: true, message: 'Account deleted' });
     });
+});
+
+
+// ==================== HEALTH & ROOT ====================
+
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'HouseHunters API running' });
+});
+
+// Serve index.html for root path
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Start server
