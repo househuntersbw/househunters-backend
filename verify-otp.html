@@ -6,8 +6,6 @@
   <title>Verify Account — HouseHunters Botswana</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/style.css">
-  <script src="js/api.js"></script>
-<script src="js/auth.js"></script>
 </head>
 <body>
   <div class="container auth-card">
@@ -21,9 +19,7 @@
 
     <form id="verifyOtpForm" class="stack">
       <input type="text" id="otp" placeholder="Enter 6-digit OTP" maxlength="6" required>
-      
       <div id="otpStatus" class="small muted"></div>
-      
       <button class="btn primary" type="submit">Verify Account</button>
     </form>
 
@@ -35,110 +31,94 @@
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const verifyForm = document.getElementById('verifyOtpForm');
-      const resendBtn = document.getElementById('resendOtp');
-      const otpStatus = document.getElementById('otpStatus');
-      const resendStatus = document.getElementById('resendStatus');
+  const API_BASE = 'https://househunters-backend-1.onrender.com';
 
-      // Verify OTP Form Submission
-      verifyForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const email = localStorage.getItem('pendingVerification') || localStorage.getItem('userEmail');
-        const otp = document.getElementById('otp').value.trim();
+  document.addEventListener('DOMContentLoaded', function() {
+    const verifyForm = document.getElementById('verifyOtpForm');
+    const resendBtn = document.getElementById('resendOtp');
+    const otpStatus = document.getElementById('otpStatus');
+    const resendStatus = document.getElementById('resendStatus');
 
-        if (!email) {
-          otpStatus.innerHTML = '❌ No email found. Please register again.';
-          otpStatus.style.color = 'red';
-          return;
-        }
+    verifyForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const email = localStorage.getItem('pendingVerification') || localStorage.getItem('userEmail');
+      const otp = document.getElementById('otp').value.trim();
 
-        if (!otp || otp.length !== 6) {
-          otpStatus.innerHTML = '❌ Please enter a valid 6-digit OTP';
-          otpStatus.style.color = 'red';
-          return;
-        }
+      if (!email) {
+        otpStatus.innerHTML = '❌ No email found. Please register again.';
+        otpStatus.style.color = 'red';
+        return;
+      }
 
-        otpStatus.innerHTML = '⏳ Verifying...';
-        otpStatus.style.color = 'blue';
+      if (!otp || otp.length !== 6) {
+        otpStatus.innerHTML = '❌ Please enter a valid 6-digit OTP';
+        otpStatus.style.color = 'red';
+        return;
+      }
 
-        try {
-          const response = await fetch('/https://househunters-backend-1.onrender.com/verify-otp', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email: email, otp: otp })
-          });
+      otpStatus.innerHTML = '⏳ Verifying...';
+      otpStatus.style.color = 'blue';
 
-          const result = await response.json();
+      try {
+        const response = await fetch(`${API_BASE}/api/verify-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, otp: otp })
+        });
 
-          if (result.success) {
-            otpStatus.innerHTML = '✅ ' + result.message;
-            otpStatus.style.color = 'green';
+        const result = await response.json();
 
-            // Store user data
-            localStorage.setItem('userEmail', email);
-            localStorage.setItem('verified', 'true');
-            localStorage.setItem('userName', result.user.name);
-            localStorage.setItem('userRole', result.user.role);
-
-            // Clear pending verification
-            localStorage.removeItem('pendingVerification');
-
-            // Redirect to verification success page
-            setTimeout(() => {
-              window.location.href = 'verification-success.html';
-            }, 1500);
-
-          } else {
-            otpStatus.innerHTML = '❌ ' + result.message;
-            otpStatus.style.color = 'red';
-          }
-        } catch (error) {
-          otpStatus.innerHTML = '❌ Network error: ' + error.message;
+        if (result.success) {
+          otpStatus.innerHTML = '✅ ' + result.message;
+          otpStatus.style.color = 'green';
+          localStorage.setItem('userEmail', email);
+          localStorage.setItem('verified', 'true');
+          localStorage.setItem('userName', result.user.name);
+          localStorage.setItem('userRole', result.user.role);
+          localStorage.removeItem('pendingVerification');
+          setTimeout(() => {
+            window.location.href = 'verification-success.html';
+          }, 1500);
+        } else {
+          otpStatus.innerHTML = '❌ ' + result.message;
           otpStatus.style.color = 'red';
         }
-      });
-
-      // Resend OTP functionality
-      resendBtn.addEventListener('click', async function() {
-        const email = localStorage.getItem('pendingVerification') || localStorage.getItem('userEmail');
-        
-        if (!email) {
-          resendStatus.innerHTML = '❌ No email found. Please register again.';
-          resendStatus.style.color = 'red';
-          return;
-        }
-        
-        resendStatus.innerHTML = '⏳ Sending...';
-        resendStatus.style.color = 'blue';
-        
-        try {
-          const response = await fetch('/https://househunters-backend-1.onrender.com/resend-otp', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email: email })
-          });
-          
-          const result = await response.json();
-          
-          if (result.success) {
-            resendStatus.innerHTML = '✅ ' + result.message;
-            resendStatus.style.color = 'green';
-          } else {
-            resendStatus.innerHTML = '❌ ' + result.message;
-            resendStatus.style.color = 'red';
-          }
-        } catch (error) {
-          resendStatus.innerHTML = '❌ Network error: ' + error.message;
-          resendStatus.style.color = 'red';
-        }
-      });
+      } catch (error) {
+        otpStatus.innerHTML = '❌ Network error: ' + error.message;
+        otpStatus.style.color = 'red';
+      }
     });
+
+    resendBtn.addEventListener('click', async function() {
+      const email = localStorage.getItem('pendingVerification') || localStorage.getItem('userEmail');
+      if (!email) {
+        resendStatus.innerHTML = '❌ No email found.';
+        resendStatus.style.color = 'red';
+        return;
+      }
+      resendStatus.innerHTML = '⏳ Sending...';
+      resendStatus.style.color = 'blue';
+      try {
+        const response = await fetch(`${API_BASE}/api/resend-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        });
+        const result = await response.json();
+        if (result.success) {
+          resendStatus.innerHTML = '✅ ' + result.message;
+          resendStatus.style.color = 'green';
+        } else {
+          resendStatus.innerHTML = '❌ ' + result.message;
+          resendStatus.style.color = 'red';
+        }
+      } catch (error) {
+        resendStatus.innerHTML = '❌ Network error: ' + error.message;
+        resendStatus.style.color = 'red';
+      }
+    });
+  });
   </script>
 </body>
 </html>
