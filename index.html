@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HouseHunters — Discover Your Dream Home</title>
+
+  <!-- icons + shared css -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="global.js"></script>
+</head>
+<body>
+  <main class="container app-landing">
+    <header class="landing-header">
+      <div class="brand">
+        <div class="logo"><i class="fa-solid fa-house"></i></div>
+        <h1>HouseHunters</h1>
+      </div>
+      <p class="lead">Find, compare and contact sellers & agents — all in one place.</p>
+    </header>
+
+    <section class="landing-actions">
+      <div class="btn-row">
+        <button class="btn primary" onclick="location.href='login.html'">Login</button>
+        <button class="btn ghost" onclick="location.href='signup.html'">Sign Up</button>
+      </div>
+
+      <div class="social-login small muted">or continue with</div>
+      <div class="social-row">
+        <button class="social-btn"><i class="fab fa-google"></i> Google</button>
+        <button class="social-btn"><i class="fab fa-apple"></i> Apple</button>
+        <button class="social-btn"><i class="fab fa-facebook"></i> Facebook</button>
+      </div>
+    </section>
+
+    <footer class="landing-foot small muted">
+      <a href="apartments.html">Browse Apartments</a> ·
+      <a href="standalone.html">Standalone</a> ·
+      <a href="estate.html">Estates</a>
+    </footer>
+  </main>
+
+  <script src="script.js" defer></script>
+
+  <!-- lightweight fallback UI helpers (won't override functions already defined) -->
+  <script>
+    if (typeof toggleModal === 'undefined') {
+      function toggleModal(id, show) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = show ? 'block' : 'none';
+      }
+    }
+  </script>
+</body>
+</html>
