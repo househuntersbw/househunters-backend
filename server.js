@@ -422,6 +422,22 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Delete account
+app.delete('/api/profile/:email', (req, res) => {
+    const email = req.params.email;
+    // First delete user's messages
+    db.run('DELETE FROM messages WHERE sender = ? OR receiver = ?', [email, email]);
+    // Delete user's properties
+    db.run('DELETE FROM properties WHERE posted_by = ?', [email]);
+    // Delete user's requests
+    db.run('DELETE FROM requests WHERE posted_by = ?', [email]);
+    // Finally delete user
+    db.run('DELETE FROM users WHERE email = ?', [email], function(err) {
+        if (err) return res.json({ success: false, message: 'Delete failed' });
+        res.json({ success: true, message: 'Account deleted' });
+    });
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 HouseHunters server running on port ${PORT}`);
