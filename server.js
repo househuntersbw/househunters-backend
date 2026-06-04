@@ -372,6 +372,45 @@ app.post('/api/requests', (req, res) => {
         });
 });
 
+// ============ PROFILE PICTURE UPLOAD ============
+const storage = multer.diskStorage({
+    destination: 'uploads/profiles/',
+    filename: (req, file, cb) => {
+        const email = req.params.email || req.body.email;
+        const ext = path.extname(file.originalname);
+        cb(null, email.replace(/[^a-zA-Z0-9]/g, '_') + ext);
+    }
+});
+const profileUpload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } });
+
+// Ensure profile uploads directory exists
+if (!fs.existsSync('uploads/profiles')) {
+    fs.mkdirSync('uploads/profiles', { recursive: true });
+}
+
+// Upload profile picture
+app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
+    const email = req.params.email;
+    if (!req.file) {
+        return res.json({ success: false, message: 'No file uploaded' });
+    }
+    const imageUrl = `/uploads/profiles/${req.file.filename}`;
+    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, email], (err) => {
+        if (err) return res.json({ success: false, message: 'Database error' });
+        res.json({ success: true, imageUrl: imageUrl });
+    });
+});
+
+// Get profile picture
+app.get('/api/profile/:email/picture', (req, res) => {
+    const email = req.params.email;
+    db.get('SELECT profile_picture FROM users WHERE email = ?', [email], (err, user) => {
+        if (err || !user || !user.profile_picture) {
+            return res.json({ success: false, imageUrl: null });
+        }
+        res.json({ success: true, imageUrl: user.profile_picture });
+    });
+});
 // ==================== HEALTH & ROOT ====================
 
 app.get('/api/health', (req, res) => {
