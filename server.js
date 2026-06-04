@@ -9,25 +9,26 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ============ MIDDLEWARE ============
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (HTML, CSS, JS,req.params.email images) from current directory
+// Serve static files (HTML, CSS, JS) from current directory
 app.use(express.static('.'));
 
-// Create uploads folder for property images
-if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads');
-}
+// Create uploads directories
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+if (!fs.existsSync('uploads/profiles')) fs.mkdirSync('uploads/profiles', { recursive: true });
+
 app.use('/uploads', express.static('uploads'));
 
-// Database setup
+// ============ DATABASE SETUP ============
 const db = new sqlite3.Database('./househunters.db');
 
 // Create all tables
 db.serialize(() => {
+    // Users table with profile picture
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE,
@@ -38,9 +39,11 @@ db.serialize(() => {
         role TEXT DEFAULT 'buyer',
         is_verified INTEGER DEFAULT 0,
         verification_code TEXT,
+        profile_picture TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Properties table
     db.run(`CREATE TABLE IF NOT EXISTS properties (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
@@ -58,15 +61,18 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Messages table
     db.run(`CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender TEXT,
         receiver TEXT,
         message TEXT,
         property_id INTEGER,
+        is_read INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Requests table
     db.run(`CREATE TABLE IF NOT EXISTS requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
@@ -82,12 +88,17 @@ db.serialize(() => {
     console.log('✅ Database tables ready');
 });
 
-// Helper: generate OTP
+// Helper: Generate OTP
 function generateOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// ==================== USER AUTH ====================
+// Helper: Get user by email
+function getUserByEmail(email, callback) {
+    db.get('SELECT * FROM users WHERE email = ?', [email], callback);
+}
+
+// ============ AUTHENTICATION ENDPOINTS ============
 
 // Register
 app.post('/api/register', async (req, res) => {
@@ -96,7 +107,7 @@ app.post('/api/register', async (req, res) => {
         return res.json({ success: false, message: 'Missing required fields' });
     }
     
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+    getUserByEmail(email, async (err, user) => {
         if (user) return res.json({ success: false, message: 'Email already registered' });
         
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -152,10 +163,13 @@ app.post('/api/login', (req, res) => {
                 success: false, 
                 needsVerification: true, 
                 email: user.email,
-                message: 'Please verify your account first.'
+                message: 'Please verify your account first. Check your email for OTP.'
             });
         }
-        res.json({ success: true, user: { name: user.name, email: user.email, role: user.role, phone: user.phone, location: user.location } });
+        res.json({ 
+            success: true, 
+            user: { name: user.name, email: user.email, role: user.role, phone: user.phone, location: user.location } 
+        });
     });
 });
 
@@ -171,7 +185,7 @@ app.get('/api/check-verification/:email', (req, res) => {
 app.post('/api/forgot-password', (req, res) => {
     const { email } = req.body;
     const otp = generateOTP();
-    db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+    getUserByEmail(email, (err, user) => {
         if (!user) return res.json({ success: false, message: 'Email not found' });
         db.run('UPDATE users SET verification_code = ? WHERE email = ?', [otp, email], (err) => {
             if (err) return res.json({ success: false, message: 'Failed to send code' });
@@ -203,26 +217,73 @@ app.post('/api/reset-password', async (req, res) => {
     });
 });
 
-// ==================== PROFILE ====================
+// ============ PROFILE ENDPOINTS ============
 
+// Get profile
 app.get('/api/profile/:email', (req, res) => {
-    db.get('SELECT email, name, phone, location, role, created_at FROM users WHERE email = ?', [req.params.email], (err, user) => {
-        if (!user) return res.json({ success: false, message: 'User not found' });
-        res.json({ success: true, user });
-    });
+    db.get('SELECT email, name, phone, location, role, profile_picture, created_at FROM users WHERE email = ?', 
+        [req.params.email], (err, user) => {
+            if (!user) return res.json({ success: false, message: 'User not found' });
+            res.json({ success: true, user });
+        });
 });
 
+// Update profile
 app.put('/api/profile/:email', (req, res) => {
     const { name, location, phone } = req.body;
-    db.run('UPDATE users SET name = ?, location = ?, phone = ? WHERE email = ?', [name, location, phone, req.params.email], function(err) {
-        if (err) return res.json({ success: false, message: 'Update failed' });
-        res.json({ success: true, message: 'Profile updated' });
+    db.run('UPDATE users SET name = ?, location = ?, phone = ? WHERE email = ?', 
+        [name, location, phone, req.params.email], function(err) {
+            if (err) return res.json({ success: false, message: 'Update failed' });
+            res.json({ success: true, message: 'Profile updated' });
+        });
+});
+
+// Upload profile picture
+const profileStorage = multer.diskStorage({
+    destination: 'uploads/profiles/',
+    filename: (req, file, cb) => {
+        const email = req.params.email;
+        const ext = path.extname(file.originalname);
+        cb(null, email.replace(/[^a-zA-Z0-9]/g, '_') + ext);
+    }
+});
+const profileUpload = multer({ storage: profileStorage, limits: { fileSize: 2 * 1024 * 1024 } });
+
+app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
+    const email = req.params.email;
+    if (!req.file) return res.json({ success: false, message: 'No file uploaded' });
+    const imageUrl = `/uploads/profiles/${req.file.filename}`;
+    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, email], (err) => {
+        if (err) return res.json({ success: false, message: 'Database error' });
+        res.json({ success: true, imageUrl: imageUrl });
     });
 });
 
-// ==================== PROPERTIES ====================
+// Get profile picture
+app.get('/api/profile/:email/picture', (req, res) => {
+    db.get('SELECT profile_picture FROM users WHERE email = ?', [req.params.email], (err, user) => {
+        if (err || !user || !user.profile_picture) {
+            return res.json({ success: false, imageUrl: null });
+        }
+        res.json({ success: true, imageUrl: user.profile_picture });
+    });
+});
 
-// Get all properties (optionally filter by type)
+// Delete account
+app.delete('/api/profile/:email', (req, res) => {
+    const email = req.params.email;
+    db.run('DELETE FROM messages WHERE sender = ? OR receiver = ?', [email, email]);
+    db.run('DELETE FROM properties WHERE posted_by = ?', [email]);
+    db.run('DELETE FROM requests WHERE posted_by = ?', [email]);
+    db.run('DELETE FROM users WHERE email = ?', [email], function(err) {
+        if (err) return res.json({ success: false, message: 'Delete failed' });
+        res.json({ success: true, message: 'Account deleted' });
+    });
+});
+
+// ============ PROPERTIES ENDPOINTS ============
+
+// Get all properties
 app.get('/api/properties', (req, res) => {
     const { type } = req.query;
     let sql = 'SELECT * FROM properties ORDER BY created_at DESC';
@@ -233,7 +294,7 @@ app.get('/api/properties', (req, res) => {
     }
     db.all(sql, params, (err, rows) => {
         if (err) return res.json({ success: false, properties: [] });
-        res.json({ success: true, properties: rows });
+        res.json({ success: true, properties: rows || [] });
     });
 });
 
@@ -246,15 +307,15 @@ app.get('/api/properties/:id', (req, res) => {
 });
 
 // Create property with image upload
-const storage = multer.diskStorage({
+const propertyStorage = multer.diskStorage({
     destination: 'uploads/',
     filename: (req, file, cb) => {
         cb(null, Date.now() + '-' + file.originalname);
     }
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const propertyUpload = multer({ storage: propertyStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 
-app.post('/api/properties', upload.array('images', 4), (req, res) => {
+app.post('/api/properties', propertyUpload.array('images', 4), (req, res) => {
     const { title, description, price, location, type, bedrooms, bathrooms, area, postedBy, coordinates } = req.body;
     let imagePaths = req.files ? req.files.map(f => f.path).join(',') : '';
     let lat = null, lng = null;
@@ -270,7 +331,7 @@ app.post('/api/properties', upload.array('images', 4), (req, res) => {
         });
 });
 
-// Delete property (only if user owns it)
+// Delete property
 app.delete('/api/properties/:id', (req, res) => {
     const { email } = req.body;
     db.get('SELECT posted_by FROM properties WHERE id = ?', [req.params.id], (err, property) => {
@@ -353,68 +414,31 @@ app.post('/api/messages/read', (req, res) => {
     });
 });
 
-// ==================== REQUESTS ====================
+// ============ REQUESTS ENDPOINTS ============
 
+// Get all requests
 app.get('/api/requests', (req, res) => {
     db.all('SELECT * FROM requests ORDER BY created_at DESC', [], (err, rows) => {
         res.json({ success: true, requests: rows || [] });
     });
 });
 
+// Post a request
 app.post('/api/requests', (req, res) => {
     const { title, description, type, budget, location, contactName, postedBy } = req.body;
     db.run(`INSERT INTO requests (title, description, type, budget, location, contact_name, posted_by)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [title, description || '', type || 'general', budget || 0, location || '', contactName || '', postedBy],
         function(err) {
-            if (err) return res.json({ success: false, message: 'Failed to post' });
+            if (err) return res.json({ success: false, message: 'Failed to post request' });
             res.json({ success: true, message: 'Request posted!', requestId: this.lastID });
         });
 });
 
-// ============ PROFILE PICTURE UPLOAD ============
-const storage = multer.diskStorage({
-    destination: 'uploads/profiles/',
-    filename: (req, file, cb) => {
-        const email = req.params.email || req.body.email;
-        const ext = path.extname(file.originalname);
-        cb(null, email.replace(/[^a-zA-Z0-9]/g, '_') + ext);
-    }
-});
-const profileUpload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } });
-
-// Ensure profile uploads directory exists
-if (!fs.existsSync('uploads/profiles')) {
-    fs.mkdirSync('uploads/profiles', { recursive: true });
-}
-
-// Upload profile picture
-app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
-    const email = req.params.email;
-    if (!req.file) {
-        return res.json({ success: false, message: 'No file uploaded' });
-    }
-    const imageUrl = `/uploads/profiles/${req.file.filename}`;
-    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, email], (err) => {
-        if (err) return res.json({ success: false, message: 'Database error' });
-        res.json({ success: true, imageUrl: imageUrl });
-    });
-});
-
-// Get profile picture
-app.get('/api/profile/:email/picture', (req, res) => {
-    const email = req.params.email;
-    db.get('SELECT profile_picture FROM users WHERE email = ?', [email], (err, user) => {
-        if (err || !user || !user.profile_picture) {
-            return res.json({ success: false, imageUrl: null });
-        }
-        res.json({ success: true, imageUrl: user.profile_picture });
-    });
-});
-// ==================== HEALTH & ROOT ====================
+// ============ HEALTH CHECK & ROOT ============
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'HouseHunters API running' });
+    res.json({ status: 'ok', message: 'HouseHunters API is live!' });
 });
 
 // Serve index.html for root path
@@ -422,8 +446,20 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
+// ============ START SERVER ============
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 HouseHunters server running on port ${PORT}`);
-    console.log(`📁 Static files being served from current directory`);
+    console.log(`
+    ╔════════════════════════════════════════╗
+    ║   🏠 HouseHunters Botswana Backend     ║
+    ║                                        ║
+    ║   Server running on port: ${PORT}        ║
+    ║   API: http://localhost:${PORT}/api     ║
+    ║                                        ║
+    ║   ✅ Database connected                ║
+    ║   ✅ Auth endpoints ready              ║
+    ║   ✅ Chat endpoints ready              ║
+    ║   ✅ Properties endpoints ready        ║
+    ║   ✅ Profile with pictures ready       ║
+    ╚════════════════════════════════════════╝
+    `);
 });
