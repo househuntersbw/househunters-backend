@@ -1,10 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,102 +10,66 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname)); // Serve HTML files
-app.use('/uploads', express.static('uploads'));
 
-// Create uploads directory
-if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads');
-}
+// Serve static files (HTML, CSS, JS) from current directory
+app.use(express.static(__dirname));
 
-// Database setup
+// Database
 const db = new sqlite3.Database('./househunters.db');
 
-// Create tables
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE,
-        password TEXT,
-        name TEXT,
-        phone TEXT,
-        location TEXT,
-        role TEXT DEFAULT 'buyer',
-        is_verified INTEGER DEFAULT 1,
-        verification_code TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    
-    db.run(`CREATE TABLE IF NOT EXISTS properties (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        description TEXT,
-        price REAL,
-        location TEXT,
-        type TEXT,
-        bedrooms INTEGER,
-        bathrooms INTEGER,
-        area REAL,
-        latitude REAL,
-        longitude REAL,
-        posted_by TEXT,
-        images TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    
-    db.run(`CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        sender TEXT,
-        receiver TEXT,
-        message TEXT,
-        property_id INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    
-    db.run(`CREATE TABLE IF NOT EXISTS requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        description TEXT,
-        type TEXT,
-        budget REAL,
-        location TEXT,
-        contact_name TEXT,
-        posted_by TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    
-    console.log('✅ Database ready');
-});
-
-// Generate OTP
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// ============ API ENDPOINTS ============
+db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE,
+    password TEXT,
+    name TEXT,
+    phone TEXT,
+    location TEXT,
+    role TEXT DEFAULT 'buyer'
+)`);
 
 // Register
 app.post('/api/register', async (req, res) => {
-    const { name, email, phone, password, location, role } = req.body;
+    const { name, email, password, role } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-        if (user) {
-            return res.json({ success: false, message: 'Email already registered' });
-        }
-        
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const otp = generateOTP();
-        
-        db.run(`INSERT INTO users (email, password, name, phone, location, role, verification_code, is_verified) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-            [email, hashedPassword, name, phone || '', location || '', role || 'buyer', otp],
-            function(err) {
-                if (err) {
-                    return res.json({ success: false, message: 'Registration failed' });
-                }
-                res.json({ 
-                    success: true, 
-                    message: 'Registration successful! You can now login.',
-                    user: { name, email, role }
+    db.run(`INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)`,
+        [email, hashedPassword, name, role || 'buyer'],
+        function(err) {
+            if (err) return res.json({ success: false, message: 'Email exists' });
+            res.json({ success: true, message: 'Registered!' });
+        });
+});
 
+// Login
+app.post('/api/login', (req, res) => {
+    const { identifier, password } = req.body;
+    
+    db.get('SELECT * FROM users WHERE email = ?', [identifier], async (err, user) => {
+        if (!user) return res.json({ success: false, message: 'User not found' });
+        
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return res.json({ success: false, message: 'Wrong password' });
+        
+        res.json({ success: true, user: { name: user.name, email: user.email, role: user.role } });
+    });
+});
+
+// Properties (for now returns empty array)
+app.get('/api/properties', (req, res) => {
+    res.json({ success: true, properties: [] });
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+// Serve index.html for root
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+});
