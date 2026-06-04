@@ -61,82 +61,37 @@
 <script>
 // Updated postNewRequest function for property pages
 async function postNewRequest(type) {
-  const userEmail = localStorage.getItem('userEmail');
-  const userName = localStorage.getItem('userName') || 'User';
-  
-  if (!userEmail) {
-    alert('❌ Please login to post requests');
-    window.location.href = 'login.html';
-    return;
-  }
-
-  const title = document.getElementById('newTitle')?.value || '';
-  const description = document.getElementById('newDesc')?.value || '';
-  
-  if (!title || !description) {
-    alert('❌ Please fill in title and description');
-    return;
-  }
-
-  const payload = {
-    title: title,
-    description: description,
-    type: `looking-for-${type}`,
-    budget: 0,
-    location: 'Botswana',
-    contactName: userName,
-    postedBy: userEmail
-  };
-
-  try {
-    const response = await fetch('/https://househunters-backend-1.onrender.com/requests', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      alert('✅ Request posted successfully!');
-      toggleModal('newRequest', false);
-      
-      // Clear form
-      document.getElementById('newTitle').value = '';
-      document.getElementById('newOwner').value = '';
-      document.getElementById('newManager').value = '';
-      document.getElementById('newDesc').value = '';
-    } else {
-      alert('❌ ' + result.message);
+      const userEmail = localStorage.getItem('userEmail');
+      const userName = localStorage.getItem('userName') || 'User';
+      if (!userEmail) {
+        alert('❌ Please login to post requests');
+        window.location.href = 'login.html';
+        return;
+      }
+      const title = document.getElementById('newTitle')?.value || '';
+      const description = document.getElementById('newDesc')?.value || '';
+      if (!title || !description) {
+        alert('❌ Please fill in title and description');
+        return;
+      }
+      const payload = { title, description, type: `looking-for-${type}`, budget: 0, location: 'Botswana', contactName: userName, postedBy: userEmail };
+      try {
+        const response = await fetch(`${API_BASE}/requests`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (result.success) {
+          alert('✅ Request posted successfully!');
+          toggleModal('newRequest', false);
+          document.getElementById('newTitle').value = '';
+          document.getElementById('newDesc').value = '';
+        } else {
+          alert('❌ ' + result.message);
+        }
+      } catch (error) {
+        alert('❌ Network error: ' + error.message);
+      }
     }
-  } catch (error) {
-    alert('❌ Network error: ' + error.message);
-  }
-}
-  // Real API call
-  fetch('/https://househunters-backend-1.onrender.com/requests', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(response => response.json())
-  .then(result => {
-    if (result.success) {
-      alert('✅ Request posted successfully!');
-      toggleModal('newRequest', false);
-      
-      // Clear form
-      document.getElementById('newTitle').value = '';
-      document.getElementById('newOwner').value = '';
-      document.getElementById('newManager').value = '';
-      document.getElementById('newDesc').value = '';
-    } else {
-      alert('❌ ' + result.message);
-    }
-  })
-  .catch(error => {
-    alert('❌ Network error: ' + error.message);
-  });
 </script>
 </body>
 </html>
