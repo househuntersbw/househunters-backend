@@ -1,13 +1,11 @@
 // global.js - Shared functions for HouseHunters
 const API_BASE = 'https://househunters-backend-1.onrender.com/api';
 
-// Toggle modal visibility
 function toggleModal(id, show) {
     const el = document.getElementById(id);
     if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-// Tab switching
 function openTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.style.display = 'none';
