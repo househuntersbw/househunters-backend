@@ -10,7 +10,6 @@
 <body>
   <div class="container auth-card">
     <button class="close-btn" onclick="location.href='index.html'">×</button>
-
     <div class="auth-head">
       <div class="logo-small">HH</div>
       <h1>Verify Your Account</h1>
@@ -41,7 +40,6 @@
 
     verifyForm.addEventListener('submit', async function(e) {
       e.preventDefault();
-      
       const email = localStorage.getItem('pendingVerification') || localStorage.getItem('userEmail');
       const otp = document.getElementById('otp').value.trim();
 
@@ -50,7 +48,6 @@
         otpStatus.style.color = 'red';
         return;
       }
-
       if (!otp || otp.length !== 6) {
         otpStatus.innerHTML = '❌ Please enter a valid 6-digit OTP';
         otpStatus.style.color = 'red';
@@ -64,9 +61,8 @@
         const response = await fetch(`${API_BASE}/api/verify-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email, otp: otp })
+          body: JSON.stringify({ email, otp })
         });
-
         const result = await response.json();
 
         if (result.success) {
@@ -77,9 +73,7 @@
           localStorage.setItem('userName', result.user.name);
           localStorage.setItem('userRole', result.user.role);
           localStorage.removeItem('pendingVerification');
-          setTimeout(() => {
-            window.location.href = 'verification-success.html';
-          }, 1500);
+          setTimeout(() => window.location.href = 'verification-success.html', 1500);
         } else {
           otpStatus.innerHTML = '❌ ' + result.message;
           otpStatus.style.color = 'red';
@@ -103,7 +97,7 @@
         const response = await fetch(`${API_BASE}/api/resend-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email })
+          body: JSON.stringify({ email })
         });
         const result = await response.json();
         if (result.success) {
