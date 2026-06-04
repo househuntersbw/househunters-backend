@@ -4,103 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Agent Dashboard — HouseHunters</title>
-
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/style.css">
   <script src="global.js"></script>
-  <script>
-  // VERIFICATION CHECK - Add this to buyer.html, seller.html, agent.html
-document.addEventListener('DOMContentLoaded', function() {
-  checkVerificationStatus();
-});
-
-async function checkVerificationStatus() {
-  const userEmail = localStorage.getItem('userEmail');
-  
-  if (!userEmail) {
-    showVerificationError('Please complete registration first.');
-    return;
-  }
-  
-  try {
-    const response = await fetch(`/https://househunters-backend-1.onrender.com/check-verification/${userEmail}`);
-    const result = await response.json();
-    
-    if (!result.success || !result.verified) {
-      showVerificationError('Please verify your account before accessing the app.');
-    }
-  } catch (error) {
-    showVerificationError('Error checking verification status.');
-  }
-}
-
-function showVerificationError(message) {
-  // Create error popup
-  const errorPopup = document.createElement('div');
-  errorPopup.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-    font-family: Arial, sans-serif;
-  `;
-  
-  errorPopup.innerHTML = `
-    <div style="
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      text-align: center;
-      max-width: 300px;
-      margin: 20px;
-    ">
-      <div style="font-size: 3rem; margin-bottom: 15px;">🔐</div>
-      <h3 style="margin: 0 0 15px 0; color: #333;">Account Verification Required</h3>
-      <p style="margin: 0 0 20px 0; color: #666; line-height: 1.4;">${message}</p>
-      <button onclick="redirectToVerification()" style="
-        background: #000;
-        color: white;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-weight: bold;
-        cursor: pointer;
-        width: 100%;
-      ">Verify Account</button>
-      <button onclick="logout()" style="
-        background: transparent;
-        color: #666;
-        border: 1px solid #ddd;
-        padding: 12px 24px;
-        border-radius: 8px;
-        margin-top: 10px;
-        cursor: pointer;
-        width: 100%;
-      ">Logout</button>
-    </div>
-  `;
-  
-  document.body.appendChild(errorPopup);
-}
-
-function redirectToVerification() {
-  window.location.href = 'verify-otp.html';
-}
-
-function logout() {
-  localStorage.removeItem('userEmail');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('pendingVerification');
-  window.location.href = 'index.html';
-}
-
-</script>
 </head>
 <body>
   <div class="app">
@@ -114,20 +20,20 @@ function logout() {
       </div>
     </header>
 
-    <section class="top-actions grid-4">  <!-- Change to grid-4 -->
-  <button class="btn card" onclick="toggleModal('manageListings', true)">
-    <i class="fa-solid fa-layer-group"></i><span>Managed</span>
-  </button>
-  <button class="btn card" onclick="toggleModal('connectedSellers', true)">
-    <i class="fa-solid fa-user-check"></i><span>Sellers</span>
-  </button>
-  <button class="btn card primary" onclick="location.href='create-listing.html'">
-    <i class="fas fa-plus"></i><span>Create Listing</span>
-  </button>
-  <button class="btn card" onclick="toggleModal('newRequest', true)">
-    <i class="fa-solid fa-paper-plane"></i><span>Post Request</span>
-  </button>
-</section>
+    <section class="top-actions grid-4">
+      <button class="btn card" onclick="toggleModal('manageListings', true)">
+        <i class="fa-solid fa-layer-group"></i><span>Managed</span>
+      </button>
+      <button class="btn card" onclick="toggleModal('connectedSellers', true)">
+        <i class="fa-solid fa-user-check"></i><span>Sellers</span>
+      </button>
+      <button class="btn card primary" onclick="location.href='create-listing.html'">
+        <i class="fas fa-plus"></i><span>Create Listing</span>
+      </button>
+      <button class="btn card" onclick="toggleModal('newRequest', true)">
+        <i class="fa-solid fa-paper-plane"></i><span>Post Request</span>
+      </button>
+    </section>
 
     <main class="main-content">
       <div class="categories horizontal-scroll">
@@ -171,7 +77,7 @@ function logout() {
   <!-- Modals -->
   <div id="manageListings" class="modal" style="display:none;">
     <div class="modal-content">
-      <button class="close-btn" onclick="toggleModal('manageListings', false)">�</button>
+      <button class="close-btn" onclick="toggleModal('manageListings', false)">×</button>
       <h3>My Managed Listings</h3>
       <div id="managedListingsContainer"></div>
     </div>
@@ -184,26 +90,112 @@ function logout() {
       <div id="connectedSellersList"></div>
     </div>
   </div>
-  
+
   <div id="newRequest" class="modal" style="display:none;">
-  <div class="modal-content">
-    <button class="close-btn" onclick="toggleModal('newRequest', false)">�</button>
-    <h3>Post Request</h3>
-    <input id="requestTitle" placeholder="Request Title">
-    <textarea id="requestDesc" placeholder="What are you looking for?" rows="4"></textarea>
-    <select id="requestType">
-      <option value="looking-for-sellers">Looking for Sellers</option>
-      <option value="looking-for-buyers">Looking for Buyers</option>
-      <option value="property-request">Property Request</option>
-      <option value="collaboration">Collaboration</option>
-    </select>
-    <input id="requestBudget" placeholder="Budget (optional)" type="number">
-    <input id="requestLocation" placeholder="Location (optional)">
-    <div class="row">
-      <button class="btn primary" onclick="postAgentRequest()">Post Request</button>
-      <button class="btn ghost" onclick="toggleModal('newRequest', false)">Cancel</button>
+    <div class="modal-content">
+      <button class="close-btn" onclick="toggleModal('newRequest', false)">×</button>
+      <h3>Post Request</h3>
+      <input id="requestTitle" placeholder="Request Title">
+      <textarea id="requestDesc" placeholder="What are you looking for?" rows="4"></textarea>
+      <select id="requestType">
+        <option value="looking-for-sellers">Looking for Sellers</option>
+        <option value="looking-for-buyers">Looking for Buyers</option>
+        <option value="property-request">Property Request</option>
+        <option value="collaboration">Collaboration</option>
+      </select>
+      <input id="requestBudget" placeholder="Budget (optional)" type="number">
+      <input id="requestLocation" placeholder="Location (optional)">
+      <div class="row">
+        <button class="btn primary" onclick="postAgentRequest()">Post Request</button>
+        <button class="btn ghost" onclick="toggleModal('newRequest', false)">Cancel</button>
+      </div>
     </div>
   </div>
-</div>
+
+  <script>
+    // Check verification on page load
+    document.addEventListener('DOMContentLoaded', async function() {
+      const userEmail = localStorage.getItem('userEmail');
+      const isVerified = localStorage.getItem('verified');
+      
+      if (!userEmail) {
+        showVerificationError('Please login first.');
+        return;
+      }
+      
+      if (isVerified !== 'true') {
+        try {
+          const response = await fetch(`${API_BASE}/check-verification/${encodeURIComponent(userEmail)}`);
+          const result = await response.json();
+          if (!result.verified) {
+            showVerificationError('Please verify your account before accessing the agent dashboard.');
+          } else {
+            localStorage.setItem('verified', 'true');
+          }
+        } catch (error) {
+          console.log('Verification check failed:', error);
+        }
+      }
+    });
+
+    function showVerificationError(message) {
+      const errorPopup = document.createElement('div');
+      errorPopup.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.9); display: flex; align-items: center;
+        justify-content: center; z-index: 10000;
+      `;
+      errorPopup.innerHTML = `
+        <div style="background: #1a1a1a; padding: 30px; border-radius: 16px; text-align: center; max-width: 300px; margin: 20px;">
+          <div style="font-size: 3rem; margin-bottom: 15px;">🔒</div>
+          <h3 style="margin: 0 0 15px 0; color: white;">Verification Required</h3>
+          <p style="margin: 0 0 20px 0; color: #b0b3b8;">${message}</p>
+          <button onclick="window.location.href='verify-otp.html'" style="background: white; color: black; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;">Verify Account</button>
+          <button onclick="localStorage.clear(); window.location.href='index.html'" style="background: transparent; color: #999; border: 1px solid #333; padding: 12px 24px; border-radius: 8px; margin-top: 10px; cursor: pointer; width: 100%;">Logout</button>
+        </div>
+      `;
+      document.body.appendChild(errorPopup);
+    }
+
+    // Post request function
+    async function postAgentRequest() {
+      const userEmail = localStorage.getItem('userEmail');
+      const userName = localStorage.getItem('userName') || 'Agent';
+      const title = document.getElementById('requestTitle')?.value;
+      const description = document.getElementById('requestDesc')?.value;
+      const type = document.getElementById('requestType')?.value;
+      const budget = document.getElementById('requestBudget')?.value;
+      const location = document.getElementById('requestLocation')?.value;
+
+      if (!userEmail) {
+        alert('❌ Please login first');
+        window.location.href = 'login.html';
+        return;
+      }
+      if (!title || !description) {
+        alert('Please fill in title and description');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, type, budget, location, contactName: userName, postedBy: userEmail })
+        });
+        const result = await response.json();
+        if (result.success) {
+          alert('✅ Request posted successfully!');
+          toggleModal('newRequest', false);
+          document.getElementById('requestTitle').value = '';
+          document.getElementById('requestDesc').value = '';
+        } else {
+          alert('❌ ' + result.message);
+        }
+      } catch (error) {
+        alert('❌ Network error: ' + error.message);
+      }
+    }
+  </script>
 </body>
 </html>
