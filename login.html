@@ -6,8 +6,6 @@
   <title>Login — HouseHunters Botswana</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/style.css">
-  <script src="js/api.js"></script>
-<script src="js/auth.js"></script>
 </head>
 <body>
   <div class="container auth-card" role="main">
@@ -53,9 +51,10 @@
     </div>
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
   <script>
+  // IMPORTANT: Use your Render URL
+  const API_BASE = 'https://househunters-backend-1.onrender.com';
+
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('loginForm');
     const roles = document.querySelectorAll('.role-btn');
@@ -81,8 +80,8 @@
         loginStatus.style.color = 'blue';
 
         try {
-          // Use the correct endpoint - server expects identifier and password
-          const response = await fetch('/https://househunters-backend.onrender.com/login', {
+          // FIXED: Use correct full URL
+          const response = await fetch(`${API_BASE}/api/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -102,8 +101,6 @@
             localStorage.setItem('userRole', result.user.role);
             localStorage.setItem('userPhone', result.user.phone || '');
             
-            // Set verified flag based on server response
-            // Note: Server doesn't return verified flag directly, but if login success, they're verified
             localStorage.setItem('verified', 'true');
 
             loginStatus.innerHTML = '✅ ' + result.message;
@@ -120,14 +117,12 @@
             }, 1000);
 
           } else if (result.needsVerification) {
-            // User needs verification
             localStorage.setItem('pendingVerification', result.email);
             localStorage.setItem('userEmail', result.email);
             
             loginStatus.innerHTML = '⚠️ ' + result.message;
             loginStatus.style.color = 'orange';
             
-            // Redirect to verification page
             setTimeout(() => {
               window.location.href = 'verify-otp.html';
             }, 2000);
@@ -143,6 +138,6 @@
       });
     }
   });
-</script>
+  </script>
 </body>
 </html>
