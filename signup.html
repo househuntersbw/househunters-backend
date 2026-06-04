@@ -4,14 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Create Account — HouseHunters Botswana</title>
-
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="container auth-card">
     <button class="close-btn" onclick="location.href='index.html'">×</button>
-
     <h1>Create Account</h1>
     <p class="subtext">Choose your account type and sign up</p>
 
@@ -28,22 +26,18 @@
       <small class="muted">Format: +2677XXXXXXX (Botswana number)</small>
       <input type="password" id="password" placeholder="Password (min 6 characters)" required minlength="6">
       <input type="text" id="location" placeholder="Your location in Botswana" required>
-
       <button class="btn primary" type="submit">Create Account</button>
     </form>
-
     <p class="back small muted">Already have an account? <a href="login.html">Login</a></p>
   </div>
 
   <script>
-  // IMPORTANT: Use your Render URL here
   const API_BASE = 'https://househunters-backend-1.onrender.com';
 
   document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('signupForm');
     const roleBtns = document.querySelectorAll('.role-btn');
     
-    // Role selection
     roleBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         roleBtns.forEach(b => b.classList.remove('active'));
@@ -51,17 +45,13 @@
       });
     });
     
-    // Form submission
     if (form) {
       form.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
         const activeRole = document.querySelector('.role-btn.active');
         const role = activeRole ? activeRole.dataset.role : 'buyer';
-        
         const phone = document.getElementById('phone').value;
         
-        // Validate Botswana phone number
         if (!/^\+2677\d{7}$/.test(phone)) {
           alert('❌ Please use a valid Botswana number: +2677XXXXXXX');
           return;
@@ -77,27 +67,19 @@
         };
 
         try {
-          // Use the full API URL
           const response = await fetch(`${API_BASE}/api/register`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData)
           });
-
           const result = await response.json();
 
           if (result.success) {
-            // Store user email for verification
             localStorage.setItem('pendingVerification', formData.email);
             localStorage.setItem('userEmail', formData.email);
             localStorage.setItem('userRole', role);
             localStorage.setItem('userName', formData.name);
-            
             alert('✅ Registration successful! You can now login.');
-            
-            // Redirect to login page
             window.location.href = 'login.html';
           } else {
             alert('❌ Registration failed: ' + result.message);
