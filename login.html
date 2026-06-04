@@ -24,24 +24,18 @@
     </div>
 
     <form id="loginForm" class="stack" autocomplete="on" novalidate>
-      <label class="sr-only" for="userIdentifier">Email or Phone</label>
-      <input id="userIdentifier" name="identifier" type="text" placeholder="Email or phone" required>
-
-      <label class="sr-only" for="password">Password</label>
-      <input id="password" name="password" type="password" placeholder="Password" required>
-
+      <input id="userIdentifier" type="text" placeholder="Email or phone" required>
+      <input id="password" type="password" placeholder="Password" required>
       <div class="form-row space-between">
         <a class="small muted" href="forgot-password.html">Forgot password?</a>
         <a class="small muted" href="signup.html">Create account</a>
       </div>
-
       <button class="btn primary" type="submit">Login</button>
     </form>
 
     <div class="divider">OR</div>
-
     <div class="phone-login">
-      <input id="phoneNumber" type="tel" placeholder="+26771234567" inputmode="tel" />
+      <input id="phoneNumber" type="tel" placeholder="+26771234567" />
       <div class="row">
         <button id="sendCodeBtn" class="btn">Send Code</button>
         <button id="verifyCodeBtn" class="btn ghost" style="display:none;">Verify & Login</button>
@@ -52,7 +46,6 @@
   </div>
 
   <script>
-  // IMPORTANT: Use your Render URL
   const API_BASE = 'https://househunters-backend-1.onrender.com';
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -60,73 +53,49 @@
     const roles = document.querySelectorAll('.role-btn');
     const loginStatus = document.getElementById('loginStatus');
     
-    // Role selection
     roles.forEach(btn => btn.addEventListener('click', () => {
       roles.forEach(r => r.classList.remove('active'));
       btn.classList.add('active');
       localStorage.setItem('userRole', btn.dataset.role);
     }));
 
-    // Form submission
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const identifier = document.getElementById('userIdentifier').value;
         const password = document.getElementById('password').value;
-        const selectedRole = document.querySelector('.role-btn.active')?.dataset.role;
 
         loginStatus.innerHTML = '⏳ Logging in...';
         loginStatus.style.color = 'blue';
 
         try {
-          // FIXED: Use correct full URL
           const response = await fetch(`${API_BASE}/api/login`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-              identifier: identifier, 
-              password: password 
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier, password })
           });
-
           const result = await response.json();
 
           if (result.success) {
-            // Store user data
             localStorage.setItem('userEmail', result.user.email);
             localStorage.setItem('userName', result.user.name);
             localStorage.setItem('userRole', result.user.role);
             localStorage.setItem('userPhone', result.user.phone || '');
-            
             localStorage.setItem('verified', 'true');
 
             loginStatus.innerHTML = '✅ ' + result.message;
             loginStatus.style.color = 'green';
 
-            // Redirect based on role
             setTimeout(() => {
-              const pages = { 
-                buyer: 'buyer.html', 
-                seller: 'seller.html', 
-                agent: 'agent.html' 
-              };
+              const pages = { buyer: 'buyer.html', seller: 'seller.html', agent: 'agent.html' };
               window.location.href = pages[result.user.role] || 'index.html';
             }, 1000);
-
           } else if (result.needsVerification) {
             localStorage.setItem('pendingVerification', result.email);
             localStorage.setItem('userEmail', result.email);
-            
             loginStatus.innerHTML = '⚠️ ' + result.message;
             loginStatus.style.color = 'orange';
-            
-            setTimeout(() => {
-              window.location.href = 'verify-otp.html';
-            }, 2000);
-            
+            setTimeout(() => window.location.href = 'verify-otp.html', 2000);
           } else {
             loginStatus.innerHTML = '❌ ' + result.message;
             loginStatus.style.color = 'red';
