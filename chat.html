@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Messages — HouseHunters</title>
-
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/style.css">
   <script src="global.js"></script>
@@ -22,7 +21,9 @@
         </div>
       </header>
 
-      <div id="chatListView" class="chat-list" aria-live="polite"></div>
+      <div id="chatListView" class="chat-list" aria-live="polite">
+        <div style="text-align: center; padding: 20px; color: #6c6f72;">Loading conversations...</div>
+      </div>
     </div>
 
     <div id="conversationView" class="conversation">
@@ -30,16 +31,21 @@
         <button id="backBtn" class="icon-btn"><i class="fa-solid fa-arrow-left"></i></button>
         <div id="chatAvatar" class="avatar">AA</div>
         <div class="info">
-          <h3 id="chatName">Conversation</h3>
-          <p id="chatStatus" class="muted small">Online</p>
+          <h3 id="chatName">Select a conversation</h3>
+          <p id="chatStatus" class="muted small"></p>
         </div>
       </header>
 
-      <div id="messages" class="messages"></div>
+      <div id="messages" class="messages">
+        <div style="text-align: center; padding: 40px; color: #6c6f72;">
+          <i class="fa-regular fa-comment-dots" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+          Select a conversation to start messaging
+        </div>
+      </div>
 
       <div class="chat-input-container">
-        <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" />
-        <button id="sendBtn" class="btn primary"><i class="fa-solid fa-paper-plane"></i></button>
+        <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" disabled />
+        <button id="sendBtn" class="btn primary" disabled><i class="fa-solid fa-paper-plane"></i></button>
       </div>
     </div>
   </div>
@@ -51,66 +57,189 @@
     <a href="index.html" class="nav-item"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
   </nav>
 
-  <script src="script.js" defer></script>
-
   <script>
-    // fallback chatPageInit if not defined in script.js
-    if (typeof chatPageInit === 'undefined') {
-      function chatPageInit() {
-        const chatList = document.getElementById('chatListView');
-        const messages = document.getElementById('messages');
-        const convo = document.getElementById('conversationView');
-        convo.classList.remove('active');
+    let currentUser = null;
+    let currentContact = null;
+    let allUsers = [];
 
-        // demo conversations
-        const demos = [
-          { id: 'u1', name: 'Lebo M.', preview: 'Is the house still available?', online: true },
-          { id: 'u2', name: 'Sarah K.', preview: 'Sent you new listings', online: false }
-        ];
+    // Get current logged in user
+    function getCurrentUser() {
+      return {
+        email: localStorage.getItem('userEmail'),
+        name: localStorage.getItem('userName')
+      };
+    }
 
-        chatList.innerHTML = '';
-        demos.forEach(d => {
-          const item = document.createElement('div');
-          item.className = 'chat-item';
-          item.innerHTML = `
-            <div class="avatar">${d.name.split(' ').map(n=>n[0]).slice(0,2).join('')}</div>
-            <div class="preview"><h4>${d.name}</h4><p>${d.preview}</p></div>
-            <div class="meta">${d.online ? '<span class="online-dot"></span>' : ''}</div>
+    // Load all users for chat list (simplified - shows demo users)
+    async function loadChatList() {
+      const chatList = document.getElementById('chatListView');
+      currentUser = getCurrentUser();
+      
+      if (!currentUser.email) {
+        chatList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c6f72;">Please login first</div>';
+        return;
+      }
+
+      // Demo users for testing
+      const demoUsers = [
+        { email: 'seller@demo.com', name: 'John Seller', role: 'seller' },
+        { email: 'agent@demo.com', name: 'Mary Agent', role: 'agent' },
+        { email: 'buyer@demo.com', name: 'Peter Buyer', role: 'buyer' }
+      ];
+
+      // Filter out current user
+      allUsers = demoUsers.filter(u => u.email !== currentUser.email);
+      
+      if (allUsers.length === 0) {
+        chatList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c6f72;">No conversations yet</div>';
+        return;
+      }
+
+      chatList.innerHTML = allUsers.map(user => `
+        <div class="chat-item" data-email="${user.email}" data-name="${user.name}">
+          <div class="avatar">${user.name.charAt(0)}${user.name.split(' ')[1]?.charAt(0) || ''}</div>
+          <div class="preview">
+            <h4>${user.name}</h4>
+            <p>${user.role} • Click to chat</p>
+          </div>
+          <div class="meta"></div>
+        </div>
+      `).join('');
+
+      // Add click handlers
+      document.querySelectorAll('.chat-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const email = item.dataset.email;
+          const name = item.dataset.name;
+          openConversation(email, name);
+        });
+      });
+    }
+
+    // Open conversation with selected user
+    async function openConversation(email, name) {
+      currentContact = { email, name };
+      const convo = document.getElementById('conversationView');
+      const msgInput = document.getElementById('msgInput');
+      const sendBtn = document.getElementById('sendBtn');
+      
+      document.getElementById('chatName').textContent = name;
+      document.getElementById('chatAvatar').textContent = name.charAt(0) + (name.split(' ')[1]?.charAt(0) || '');
+      document.getElementById('chatStatus').textContent = 'Click to message';
+      
+      convo.classList.add('active');
+      msgInput.disabled = false;
+      sendBtn.disabled = false;
+      
+      await loadMessages();
+    }
+
+    // Load messages between current user and selected contact
+    async function loadMessages() {
+      if (!currentUser || !currentContact) return;
+      
+      const messagesDiv = document.getElementById('messages');
+      messagesDiv.innerHTML = '<div style="text-align: center; padding: 20px;">Loading messages...</div>';
+      
+      try {
+        const response = await fetch(`${API_BASE}/messages/${encodeURIComponent(currentUser.email)}/${encodeURIComponent(currentContact.email)}`);
+        const data = await response.json();
+        const messages = data.messages || [];
+        
+        if (messages.length === 0) {
+          messagesDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c6f72;">
+              <i class="fa-regular fa-comment" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+              No messages yet. Send a message to start the conversation!
+            </div>
           `;
-          item.addEventListener('click', () => openConversation(d));
-          chatList.appendChild(item);
-        });
-
-        function openConversation(user) {
-          document.getElementById('chatName').textContent = user.name;
-          document.getElementById('chatAvatar').textContent = user.name.split(' ').map(n=>n[0]).slice(0,2).join('');
-          messages.innerHTML = '';
-          // demo messages
-          const m1 = document.createElement('div'); m1.className='message received'; m1.innerHTML='<div class="bubble">Hello — demo message</div>';
-          const m2 = document.createElement('div'); m2.className='message sent'; m2.innerHTML='<div class="bubble">Thanks — demo reply</div>';
-          messages.appendChild(m1); messages.appendChild(m2);
-          convo.classList.add('active');
+          return;
         }
-
-        // back button
-        document.getElementById('backBtn').addEventListener('click', () => {
-          convo.classList.remove('active');
-        });
-
-        // sending demo
-        document.getElementById('sendBtn').addEventListener('click', () => {
-          const txt = document.getElementById('msgInput').value.trim();
-          if(!txt) return;
-          const el = document.createElement('div');
-          el.className = 'message sent'; el.innerHTML = `<div class="bubble">${txt}</div>`;
-          messages.appendChild(el);
-          document.getElementById('msgInput').value = '';
-          messages.scrollTop = messages.scrollHeight;
-        });
+        
+        messagesDiv.innerHTML = messages.map(msg => `
+          <div class="message ${msg.sender === currentUser.email ? 'sent' : 'received'}">
+            <div class="bubble">${escapeHtml(msg.message)}</div>
+            <div class="small muted" style="margin-top: 4px; font-size: 0.7rem;">${new Date(msg.created_at).toLocaleTimeString()}</div>
+          </div>
+        `).join('');
+        
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } catch (error) {
+        console.error('Error loading messages:', error);
+        messagesDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: red;">Error loading messages</div>';
       }
     }
 
-    document.addEventListener('DOMContentLoaded', chatPageInit);
+    // Send a message
+    async function sendMessage() {
+      const msgInput = document.getElementById('msgInput');
+      const message = msgInput.value.trim();
+      
+      if (!message) return;
+      if (!currentUser || !currentContact) {
+        alert('Please select a conversation first');
+        return;
+      }
+      
+      msgInput.disabled = true;
+      
+      try {
+        const response = await fetch(`${API_BASE}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender: currentUser.email,
+            receiver: currentContact.email,
+            message: message
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          msgInput.value = '';
+          await loadMessages();
+        } else {
+          alert('Failed to send message: ' + result.message);
+        }
+      } catch (error) {
+        alert('Network error: ' + error.message);
+      } finally {
+        msgInput.disabled = false;
+        msgInput.focus();
+      }
+    }
+
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize chat page
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Check if user is logged in
+      const userEmail = localStorage.getItem('userEmail');
+      if (!userEmail) {
+        window.location.href = 'login.html';
+        return;
+      }
+      
+      await loadChatList();
+      
+      // Setup send button
+      document.getElementById('sendBtn').addEventListener('click', sendMessage);
+      document.getElementById('msgInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+      });
+      
+      // Back button for mobile
+      document.getElementById('backBtn').addEventListener('click', () => {
+        document.getElementById('conversationView').classList.remove('active');
+      });
+    });
   </script>
 </body>
 </html>
