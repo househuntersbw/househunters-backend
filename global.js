@@ -192,8 +192,8 @@ function closeDetailModal() {
     document.body.style.overflow = '';
 }
 
-// Start chat
-function startChat(receiverEmail, propertyTitle) {
+// Start chat - FIXED: Creates initial message to start conversation
+async function startChat(receiverEmail, propertyTitle) {
     console.log('startChat called with:', receiverEmail, propertyTitle);
     const currentUser = localStorage.getItem('userEmail');
     if (!currentUser) {
@@ -207,14 +207,47 @@ function startChat(receiverEmail, propertyTitle) {
         return;
     }
     
+    // Store receiver info
     localStorage.setItem('chatReceiver', receiverEmail);
     if (propertyTitle) {
         localStorage.setItem('chatPropertyTitle', propertyTitle);
     }
     
+    // FIRST: Send an initial message to create the conversation
+    const initialMessage = `Hi! I'm interested in your property: ${propertyTitle}`;
+    
+    try {
+        const response = await fetch(`${API_BASE}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                sender: currentUser, 
+                receiver: receiverEmail, 
+                message: initialMessage 
+            })
+        });
+        const result = await response.json();
+        console.log('Initial message sent:', result);
+        
+        // Also send an inquiry to notify the seller
+        await fetch(`${API_BASE}/inquiries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                buyer_email: currentUser,
+                seller_email: receiverEmail,
+                property_id: null,
+                message: `Interested in property: ${propertyTitle}`
+            })
+        });
+        
+    } catch(error) {
+        console.error('Error sending initial message:', error);
+    }
+    
+    // Redirect to chat page
     window.location.href = 'chat.html';
 }
-
 // Save listing
 async function saveListing(propertyId) {
     console.log('saveListing called for property:', propertyId);
