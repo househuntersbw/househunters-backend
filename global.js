@@ -21,7 +21,6 @@ function openTab(tabName) {
     });
 }
 
-// Load properties with images, save button, chat button, inquiry button
 async function loadProperties(type, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -120,7 +119,6 @@ async function loadProperties(type, containerId) {
                 }
             }
             
-            // FIXED: Added cursor pointer and onclick for clickable card
             return `
                 <div class="listing-card" style="overflow:hidden; cursor: pointer;" onclick="viewListingDetail(${prop.id})">
                     ${imageHtml}
@@ -144,7 +142,6 @@ async function loadProperties(type, containerId) {
     }
 }
 
-// ============ VIEW LISTING DETAIL MODAL ============
 async function viewListingDetail(propertyId) {
     try {
         const response = await fetch(`${API_BASE}/properties/${propertyId}`);
@@ -200,7 +197,6 @@ function closeDetailModal() {
     document.body.style.overflow = '';
 }
 
-// ============ CHAT FUNCTION ============
 function startChat(receiverEmail, propertyTitle) {
     const currentUser = localStorage.getItem('userEmail');
     if (!currentUser) {
@@ -214,6 +210,7 @@ function startChat(receiverEmail, propertyTitle) {
         return;
     }
     
+    console.log('Starting chat with:', receiverEmail);
     localStorage.setItem('chatReceiver', receiverEmail);
     if (propertyTitle) {
         localStorage.setItem('chatPropertyTitle', propertyTitle);
@@ -222,7 +219,6 @@ function startChat(receiverEmail, propertyTitle) {
     window.location.href = 'chat.html';
 }
 
-// ============ SAVE LISTING ============
 async function saveListing(propertyId) {
     const userEmail = localStorage.getItem('userEmail');
     if (!userEmail) {
@@ -267,7 +263,6 @@ async function unsaveListing(propertyId) {
     }
 }
 
-// ============ INQUIRY ============
 function openInquiryModal(propertyId, propertyTitle, ownerEmail, ownerRole) {
     const modal = document.getElementById('inquiryModal');
     if (!modal) return;
@@ -321,7 +316,6 @@ async function sendInquiry() {
     }
 }
 
-// ============ LOAD SAVED LISTINGS ============
 async function loadSavedListings() {
     const container = document.getElementById('savedContainer');
     if (!container) return;
@@ -348,7 +342,6 @@ async function loadSavedListings() {
     }
 }
 
-// ============ LOAD AGENTS LIST ============
 async function loadAgentsList() {
     const container = document.getElementById('agentsContainer');
     if (!container) return;
@@ -376,7 +369,6 @@ async function loadAgentsList() {
     }
 }
 
-// ============ LOAD SELLERS LIST ============
 async function loadSellersList() {
     const container = document.getElementById('sellersContainer');
     if (!container) return;
@@ -404,7 +396,6 @@ async function loadSellersList() {
     }
 }
 
-// ============ LOAD MY LISTINGS ============
 async function loadMyListings() {
     const email = localStorage.getItem('userEmail');
     const container = document.getElementById('myListings');
@@ -692,7 +683,6 @@ function setupSmartNav() {
     });
 }
 
-// ============ DARK/LIGHT MODE ============
 function applyTheme(isDark) {
     if (isDark) {
         document.body.style.backgroundColor = '#000000';
@@ -832,7 +822,7 @@ function initTheme() {
     }
 }
 
-// ============ WINDOW EXPORTS ============
+// WINDOW EXPORTS
 window.startChat = startChat;
 window.viewListingDetail = viewListingDetail;
 window.closeDetailModal = closeDetailModal;
@@ -862,7 +852,6 @@ window.setupSmartNav = setupSmartNav;
 window.initTheme = initTheme;
 window.applyTheme = applyTheme;
 
-// Initialize theme on page load
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initTheme();
