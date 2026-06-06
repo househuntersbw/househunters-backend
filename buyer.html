@@ -50,7 +50,7 @@
     <!-- Saved Modal -->
     <div id="savedModal" class="modal">
         <div class="modal-content">
-            <button class="close-btn" onclick="toggleModal('savedModal', false)">�</button>
+            <button class="close-btn" onclick="toggleModal('savedModal', false)">×</button>
             <h3>Saved Listings</h3>
             <div id="savedContainer" class="listings">Loading...</div>
         </div>
@@ -59,7 +59,7 @@
     <!-- Agents Modal -->
     <div id="agentsModal" class="modal">
         <div class="modal-content">
-            <button class="close-btn" onclick="toggleModal('agentsModal', false)">�</button>
+            <button class="close-btn" onclick="toggleModal('agentsModal', false)">×</button>
             <h3>Available Agents</h3>
             <div id="agentsContainerModal" class="listings">Loading...</div>
         </div>
@@ -68,7 +68,7 @@
     <!-- Request Modal -->
     <div id="requestModal" class="modal">
         <div class="modal-content">
-            <button class="close-btn" onclick="toggleModal('requestModal', false)">�</button>
+            <button class="close-btn" onclick="toggleModal('requestModal', false)">×</button>
             <h3>Post Buyer Request</h3>
             <input id="reqTitle" placeholder="Title">
             <textarea id="reqDesc" placeholder="Description" rows="4"></textarea>
@@ -88,7 +88,7 @@
     <!-- Inquiry Modal -->
     <div id="inquiryModal" class="modal">
         <div class="modal-content">
-            <button class="close-btn" onclick="toggleModal('inquiryModal', false)">�</button>
+            <button class="close-btn" onclick="toggleModal('inquiryModal', false)">×</button>
             <h3>Send Inquiry</h3>
             <p><strong>Regarding:</strong> <span id="inquiryPropertyTitle"></span></p>
             <input type="hidden" id="inquiryPropertyId">
@@ -134,5 +134,26 @@
         };
     });
     </script>
+    <script>
+    // Debug - Check if functions exist
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('=== BUYER PAGE DEBUG ===');
+        console.log('saveListing function exists:', typeof window.saveListing);
+        console.log('startChat function exists:', typeof window.startChat);
+        console.log('openInquiryModal function exists:', typeof window.openInquiryModal);
+        
+        if (typeof window.saveListing !== 'function') {
+            console.error('❌ saveListing is NOT a function!');
+        } else {
+            console.log('✅ saveListing IS a function');
+        }
+        
+        if (typeof window.startChat !== 'function') {
+            console.error('❌ startChat is NOT a function!');
+        } else {
+            console.log('✅ startChat IS a function');
+        }
+    });
+</script>
 </body>
 </html>
