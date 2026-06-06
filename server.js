@@ -13,20 +13,18 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve static files (HTML, CSS, JS, images) from current directory
 app.use(express.static('.'));
-
-// Create uploads folder for property images
-if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads');
-}
 app.use('/uploads', express.static('uploads'));
 
-// Database setup
-const db = new sqlite3.Database('./househunters.db');
+// Create directories
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+if (!fs.existsSync('uploads/profiles')) fs.mkdirSync('uploads/profiles', { recursive: true });
 
-// Create all tables
+// Database - Use /tmp on Render for writable storage
+const dbPath = process.env.RENDER ? '/tmp/househunters.db' : './househunters.db';
+const db = new sqlite3.Database(dbPath);
+
+// Create ALL tables
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +36,7 @@ db.serialize(() => {
         role TEXT DEFAULT 'buyer',
         is_verified INTEGER DEFAULT 0,
         verification_code TEXT,
+        profile_picture TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
@@ -64,6 +63,7 @@ db.serialize(() => {
         receiver TEXT,
         message TEXT,
         property_id INTEGER,
+        is_read INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
@@ -79,109 +79,93 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    console.log('✅ Database tables ready');
+    db.run(`CREATE TABLE IF NOT EXISTS saved_listings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        buyer_email TEXT,
+        property_id INTEGER,
+        saved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(buyer_email, property_id)
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user1_email TEXT,
+        user2_email TEXT,
+        connected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user1_email, user2_email)
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS inquiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        buyer_email TEXT,
+        seller_email TEXT,
+        property_id INTEGER,
+        message TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    console.log('✅ Database tables ready at', dbPath);
 });
 
-// Helper: generate OTP
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
+function generateOTP() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
-// ==================== USER AUTH ====================
+// ============ AUTH ENDPOINTS ============
 
-// Register
 app.post('/api/register', async (req, res) => {
     const { name, email, phone, password, location, role } = req.body;
-    if (!name || !email || !password) {
-        return res.json({ success: false, message: 'Missing required fields' });
-    }
+    if (!name || !email || !password) return res.json({ success: false, message: 'Missing fields' });
     
     db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-        if (user) return res.json({ success: false, message: 'Email already registered' });
-        
-        const hashedPassword = await bcrypt.hash(password, 10);
+        if (user) return res.json({ success: false, message: 'Email exists' });
+        const hashed = await bcrypt.hash(password, 10);
         const otp = generateOTP();
-        
-        db.run(`INSERT INTO users (email, password, name, phone, location, role, verification_code) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [email, hashedPassword, name, phone || '', location || '', role || 'buyer', otp],
-            function(err) {
+        db.run(`INSERT INTO users (email, password, name, phone, location, role, verification_code) VALUES (?,?,?,?,?,?,?)`,
+            [email, hashed, name, phone || '', location || '', role || 'buyer', otp], function(err) {
                 if (err) return res.json({ success: false, message: 'Registration failed' });
-                console.log(`📧 OTP for ${email}: ${otp}`);
-                res.json({ success: true, message: `Registration successful! Use OTP: ${otp} to verify` });
+                console.log(`OTP for ${email}: ${otp}`);
+                res.json({ success: true, message: `Registered! Use OTP: ${otp}` });
             });
     });
 });
 
-// Verify OTP
 app.post('/api/verify-otp', (req, res) => {
     const { email, otp } = req.body;
     db.get('SELECT * FROM users WHERE email = ? AND verification_code = ?', [email, otp], (err, user) => {
         if (!user) return res.json({ success: false, message: 'Invalid OTP' });
-        db.run('UPDATE users SET is_verified = 1, verification_code = NULL WHERE email = ?', [email], (err) => {
-            if (err) return res.json({ success: false, message: 'Verification failed' });
-            res.json({ 
-                success: true, 
-                message: 'Account verified successfully!',
-                user: { name: user.name, email: user.email, role: user.role }
-            });
-        });
+        db.run('UPDATE users SET is_verified = 1, verification_code = NULL WHERE email = ?', [email]);
+        res.json({ success: true, message: 'Verified!', user: { name: user.name, email: user.email, role: user.role } });
     });
 });
 
-// Resend OTP
 app.post('/api/resend-otp', (req, res) => {
     const { email } = req.body;
     const newOtp = generateOTP();
-    db.run('UPDATE users SET verification_code = ? WHERE email = ?', [newOtp, email], function(err) {
-        if (err) return res.json({ success: false, message: 'Failed to resend code' });
-        console.log(`📧 New OTP for ${email}: ${newOtp}`);
-        res.json({ success: true, message: `New OTP sent: ${newOtp}` });
-    });
+    db.run('UPDATE users SET verification_code = ? WHERE email = ?', [newOtp, email]);
+    res.json({ success: true, message: `New OTP: ${newOtp}` });
 });
 
-// Login
 app.post('/api/login', (req, res) => {
     const { identifier, password } = req.body;
     db.get('SELECT * FROM users WHERE email = ?', [identifier], async (err, user) => {
         if (!user) return res.json({ success: false, message: 'User not found' });
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return res.json({ success: false, message: 'Wrong password' });
-        if (!user.is_verified) {
-            return res.json({ 
-                success: false, 
-                needsVerification: true, 
-                email: user.email,
-                message: 'Please verify your account first.'
-            });
-        }
+        if (!user.is_verified) return res.json({ success: false, needsVerification: true, email: user.email, message: 'Please verify' });
         res.json({ success: true, user: { name: user.name, email: user.email, role: user.role, phone: user.phone, location: user.location } });
     });
 });
 
-// Check verification status
-app.get('/api/check-verification/:email', (req, res) => {
-    db.get('SELECT is_verified FROM users WHERE email = ?', [req.params.email], (err, user) => {
-        if (!user) return res.json({ success: false, verified: false });
-        res.json({ success: true, verified: user.is_verified === 1 });
-    });
-});
-
-// Forgot Password - send OTP
 app.post('/api/forgot-password', (req, res) => {
     const { email } = req.body;
     const otp = generateOTP();
     db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
         if (!user) return res.json({ success: false, message: 'Email not found' });
-        db.run('UPDATE users SET verification_code = ? WHERE email = ?', [otp, email], (err) => {
-            if (err) return res.json({ success: false, message: 'Failed to send code' });
-            console.log(`🔐 Password reset OTP for ${email}: ${otp}`);
-            res.json({ success: true, message: `Reset code sent: ${otp}` });
-        });
+        db.run('UPDATE users SET verification_code = ? WHERE email = ?', [otp, email]);
+        res.json({ success: true, message: `Reset code: ${otp}` });
     });
 });
 
-// Verify reset OTP
 app.post('/api/verify-reset-otp', (req, res) => {
     const { email, otp } = req.body;
     db.get('SELECT * FROM users WHERE email = ? AND verification_code = ?', [email, otp], (err, user) => {
@@ -190,23 +174,34 @@ app.post('/api/verify-reset-otp', (req, res) => {
     });
 });
 
-// Reset password
 app.post('/api/reset-password', async (req, res) => {
     const { email, otp, newPassword } = req.body;
     db.get('SELECT * FROM users WHERE email = ? AND verification_code = ?', [email, otp], async (err, user) => {
-        if (!user) return res.json({ success: false, message: 'Invalid verification' });
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        db.run('UPDATE users SET password = ?, verification_code = NULL WHERE email = ?', [hashedPassword, email], (err) => {
-            if (err) return res.json({ success: false, message: 'Failed to reset password' });
-            res.json({ success: true, message: 'Password reset successful!' });
-        });
+        if (!user) return res.json({ success: false, message: 'Invalid' });
+        const hashed = await bcrypt.hash(newPassword, 10);
+        db.run('UPDATE users SET password = ?, verification_code = NULL WHERE email = ?', [hashed, email]);
+        res.json({ success: true, message: 'Password reset!' });
     });
 });
 
-// ==================== PROFILE ====================
+// ============ USER LIST ENDPOINTS ============
+
+app.get('/api/users/agents', (req, res) => {
+    db.all('SELECT email, name, phone, location, profile_picture FROM users WHERE role = ? AND is_verified = 1', ['agent'], (err, agents) => {
+        res.json({ success: true, agents: agents || [] });
+    });
+});
+
+app.get('/api/users/sellers', (req, res) => {
+    db.all('SELECT email, name, phone, location, profile_picture FROM users WHERE role = ? AND is_verified = 1', ['seller'], (err, sellers) => {
+        res.json({ success: true, sellers: sellers || [] });
+    });
+});
+
+// ============ PROFILE ENDPOINTS ============
 
 app.get('/api/profile/:email', (req, res) => {
-    db.get('SELECT email, name, phone, location, role, created_at FROM users WHERE email = ?', [req.params.email], (err, user) => {
+    db.get('SELECT email, name, phone, location, role, profile_picture, created_at FROM users WHERE email = ?', [req.params.email], (err, user) => {
         if (!user) return res.json({ success: false, message: 'User not found' });
         res.json({ success: true, user });
     });
@@ -220,9 +215,34 @@ app.put('/api/profile/:email', (req, res) => {
     });
 });
 
-// ==================== PROPERTIES ====================
+const profileStorage = multer.diskStorage({
+    destination: 'uploads/profiles/',
+    filename: (req, file, cb) => {
+        cb(null, req.params.email.replace(/[^a-zA-Z0-9]/g, '_') + path.extname(file.originalname));
+    }
+});
+const profileUpload = multer({ storage: profileStorage, limits: { fileSize: 2 * 1024 * 1024 } });
 
-// Get all properties (optionally filter by type)
+app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
+    if (!req.file) return res.json({ success: false, message: 'No file' });
+    const imageUrl = `/uploads/profiles/${req.file.filename}`;
+    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, req.params.email]);
+    res.json({ success: true, imageUrl: imageUrl });
+});
+
+app.delete('/api/profile/:email', (req, res) => {
+    const email = req.params.email;
+    db.run('DELETE FROM messages WHERE sender = ? OR receiver = ?', [email, email]);
+    db.run('DELETE FROM properties WHERE posted_by = ?', [email]);
+    db.run('DELETE FROM requests WHERE posted_by = ?', [email]);
+    db.run('DELETE FROM saved_listings WHERE buyer_email = ?', [email]);
+    db.run('DELETE FROM users WHERE email = ?', [email], () => {
+        res.json({ success: true, message: 'Account deleted' });
+    });
+});
+
+// ============ PROPERTIES ENDPOINTS ============
+
 app.get('/api/properties', (req, res) => {
     const { type } = req.query;
     let sql = 'SELECT * FROM properties ORDER BY created_at DESC';
@@ -232,128 +252,107 @@ app.get('/api/properties', (req, res) => {
         params = [type];
     }
     db.all(sql, params, (err, rows) => {
-        if (err) return res.json({ success: false, properties: [] });
-        res.json({ success: true, properties: rows });
+        res.json({ success: true, properties: rows || [] });
     });
 });
 
-// Get single property
-app.get('/api/properties/:id', (req, res) => {
-    db.get('SELECT * FROM properties WHERE id = ?', [req.params.id], (err, row) => {
-        if (err || !row) return res.json({ success: false, message: 'Property not found' });
-        res.json({ success: true, property: row });
-    });
-});
-
-// Create property with image upload
-const storage = multer.diskStorage({
-    destination: 'uploads/',
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + '-' + file.originalname);
-    }
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
-
-app.post('/api/properties', upload.array('images', 4), (req, res) => {
-    const { title, description, price, location, type, bedrooms, bathrooms, area, postedBy, coordinates } = req.body;
-    let imagePaths = req.files ? req.files.map(f => f.path).join(',') : '';
-    let lat = null, lng = null;
-    if (coordinates) {
-        try { const coords = JSON.parse(coordinates); lat = coords.lat; lng = coords.lng; } catch(e) {}
-    }
-    db.run(`INSERT INTO properties (title, description, price, location, type, bedrooms, bathrooms, area, latitude, longitude, posted_by, images)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [title, description || '', price, location || '', type || 'apartments', bedrooms || 0, bathrooms || 0, area || 0, lat, lng, postedBy, imagePaths],
-        function(err) {
-            if (err) return res.json({ success: false, message: 'Failed to create listing: ' + err.message });
-            res.json({ success: true, message: 'Listing created!', propertyId: this.lastID });
-        });
-});
-
-// Delete property (only if user owns it)
-app.delete('/api/properties/:id', (req, res) => {
-    const { email } = req.body;
-    db.get('SELECT posted_by FROM properties WHERE id = ?', [req.params.id], (err, property) => {
-        if (!property) return res.json({ success: false, message: 'Property not found' });
-        if (property.posted_by !== email) return res.json({ success: false, message: 'Unauthorized' });
-        db.run('DELETE FROM properties WHERE id = ?', [req.params.id], (err) => {
-            if (err) return res.json({ success: false, message: 'Delete failed' });
-            res.json({ success: true, message: 'Listing deleted' });
-        });
-    });
-});
-
-// Get user's own properties
 app.get('/api/my-properties/:email', (req, res) => {
     db.all('SELECT * FROM properties WHERE posted_by = ? ORDER BY created_at DESC', [req.params.email], (err, rows) => {
         res.json({ success: true, properties: rows || [] });
     });
 });
 
-// ============ CHAT ENDPOINTS ============
+const propertyStorage = multer.diskStorage({
+    destination: 'uploads/',
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+const propertyUpload = multer({ storage: propertyStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 
-// Get all conversations for a user
+app.post('/api/properties', propertyUpload.array('images', 4), (req, res) => {
+    const { title, description, price, location, type, bedrooms, bathrooms, area, postedBy } = req.body;
+    const images = req.files ? req.files.map(f => f.path).join(',') : '';
+    db.run(`INSERT INTO properties (title, description, price, location, type, bedrooms, bathrooms, area, posted_by, images)
+            VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [title, description || '', price, location || '', type || 'apartments', bedrooms || 0, bathrooms || 0, area || 0, postedBy, images],
+        function(err) {
+            if (err) return res.json({ success: false, message: 'Failed' });
+            res.json({ success: true, message: 'Listing created!', propertyId: this.lastID });
+        });
+});
+
+app.delete('/api/properties/:id', (req, res) => {
+    const { email } = req.body;
+    db.get('SELECT posted_by FROM properties WHERE id = ?', [req.params.id], (err, prop) => {
+        if (!prop) return res.json({ success: false, message: 'Not found' });
+        if (prop.posted_by !== email) return res.json({ success: false, message: 'Unauthorized' });
+        db.run('DELETE FROM properties WHERE id = ?', [req.params.id]);
+        res.json({ success: true, message: 'Deleted' });
+    });
+});
+
+// ============ SAVED LISTINGS ============
+
+app.get('/api/saved-listings/:email', (req, res) => {
+    db.all(`
+        SELECT p.* FROM saved_listings s 
+        JOIN properties p ON s.property_id = p.id 
+        WHERE s.buyer_email = ? 
+        ORDER BY s.saved_at DESC
+    `, [req.params.email], (err, listings) => {
+        res.json({ success: true, listings: listings || [] });
+    });
+});
+
+app.post('/api/saved-listings', (req, res) => {
+    const { buyer_email, property_id } = req.body;
+    db.run(`INSERT OR IGNORE INTO saved_listings (buyer_email, property_id) VALUES (?, ?)`, 
+        [buyer_email, property_id], function(err) {
+            res.json({ success: true, message: 'Listing saved!' });
+        });
+});
+
+app.delete('/api/saved-listings/:email/:propertyId', (req, res) => {
+    db.run('DELETE FROM saved_listings WHERE buyer_email = ? AND property_id = ?', [req.params.email, req.params.propertyId], () => {
+        res.json({ success: true, message: 'Removed' });
+    });
+});
+
+// ============ CHAT ============
+
 app.get('/api/conversations/:email', (req, res) => {
     const email = req.params.email;
     db.all(`
         SELECT DISTINCT 
-            CASE 
-                WHEN sender = ? THEN receiver 
-                ELSE sender 
-            END as other_user,
-            MAX(created_at) as last_message_time,
+            CASE WHEN sender = ? THEN receiver ELSE sender END as other_user,
             (SELECT message FROM messages m2 WHERE (m2.sender = ? AND m2.receiver = other_user) OR (m2.sender = other_user AND m2.receiver = ?) ORDER BY created_at DESC LIMIT 1) as last_message
-        FROM messages 
-        WHERE sender = ? OR receiver = ?
-        GROUP BY other_user
-        ORDER BY last_message_time DESC
+        FROM messages WHERE sender = ? OR receiver = ?
+        GROUP BY other_user ORDER BY last_message DESC
     `, [email, email, email, email, email], (err, conversations) => {
-        if (err) return res.json({ success: false, conversations: [] });
         res.json({ success: true, conversations: conversations || [] });
     });
 });
 
-// Get messages between two users
 app.get('/api/messages/:user1/:user2', (req, res) => {
-    const user1 = req.params.user1;
-    const user2 = req.params.user2;
-    db.all(`
-        SELECT * FROM messages 
-        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
-        ORDER BY created_at ASC
-    `, [user1, user2, user2, user1], (err, messages) => {
-        if (err) return res.json({ success: false, messages: [] });
-        res.json({ success: true, messages: messages || [] });
-    });
+    db.all(`SELECT * FROM messages WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY created_at ASC`,
+        [req.params.user1, req.params.user2, req.params.user2, req.params.user1], (err, messages) => {
+            res.json({ success: true, messages: messages || [] });
+        });
 });
 
-// Send a message
 app.post('/api/messages', (req, res) => {
-    const { sender, receiver, message, propertyId } = req.body;
-    if (!sender || !receiver || !message) {
-        return res.json({ success: false, message: 'Missing required fields' });
-    }
-    db.run(`
-        INSERT INTO messages (sender, receiver, message, property_id, created_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
-    `, [sender, receiver, message, propertyId || null], function(err) {
-        if (err) return res.json({ success: false, message: 'Failed to send message' });
-        res.json({ success: true, message: 'Message sent', messageId: this.lastID });
+    const { sender, receiver, message } = req.body;
+    if (!sender || !receiver || !message) return res.json({ success: false, message: 'Missing fields' });
+    
+    db.run(`INSERT OR IGNORE INTO connections (user1_email, user2_email) VALUES (?, ?)`, [sender, receiver]);
+    db.run(`INSERT INTO messages (sender, receiver, message) VALUES (?,?,?)`, [sender, receiver, message], function(err) {
+        if (err) return res.json({ success: false, message: 'Failed' });
+        res.json({ success: true, message: 'Sent' });
     });
 });
 
-// Mark messages as read
-app.post('/api/messages/read', (req, res) => {
-    const { currentUser, otherUser } = req.body;
-    db.run(`
-        UPDATE messages SET is_read = 1 
-        WHERE sender = ? AND receiver = ? AND is_read = 0
-    `, [otherUser, currentUser], function(err) {
-        res.json({ success: true });
-    });
-});
-
-// ==================== REQUESTS ====================
+// ============ REQUESTS ============
 
 app.get('/api/requests', (req, res) => {
     db.all('SELECT * FROM requests ORDER BY created_at DESC', [], (err, rows) => {
@@ -364,84 +363,23 @@ app.get('/api/requests', (req, res) => {
 app.post('/api/requests', (req, res) => {
     const { title, description, type, budget, location, contactName, postedBy } = req.body;
     db.run(`INSERT INTO requests (title, description, type, budget, location, contact_name, posted_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?,?,?,?,?,?,?)`,
         [title, description || '', type || 'general', budget || 0, location || '', contactName || '', postedBy],
         function(err) {
-            if (err) return res.json({ success: false, message: 'Failed to post' });
-            res.json({ success: true, message: 'Request posted!', requestId: this.lastID });
+            res.json({ success: true, message: 'Request posted!' });
         });
 });
 
-// ============ PROFILE PICTURE UPLOAD ============
-const storage = multer.diskStorage({
-    destination: 'uploads/profiles/',
-    filename: (req, file, cb) => {
-        const email = req.params.email || req.body.email;
-        const ext = path.extname(file.originalname);
-        cb(null, email.replace(/[^a-zA-Z0-9]/g, '_') + ext);
-    }
-});
-const profileUpload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } });
-
-// Ensure profile uploads directory exists
-if (!fs.existsSync('uploads/profiles')) {
-    fs.mkdirSync('uploads/profiles', { recursive: true });
-}
-
-// Upload profile picture
-app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
-    const email = req.params.email;
-    if (!req.file) {
-        return res.json({ success: false, message: 'No file uploaded' });
-    }
-    const imageUrl = `/uploads/profiles/${req.file.filename}`;
-    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, email], (err) => {
-        if (err) return res.json({ success: false, message: 'Database error' });
-        res.json({ success: true, imageUrl: imageUrl });
-    });
-});
-
-// Get profile picture
-app.get('/api/profile/:email/picture', (req, res) => {
-    const email = req.params.email;
-    db.get('SELECT profile_picture FROM users WHERE email = ?', [email], (err, user) => {
-        if (err || !user || !user.profile_picture) {
-            return res.json({ success: false, imageUrl: null });
-        }
-        res.json({ success: true, imageUrl: user.profile_picture });
-    });
-});
-
-// Delete account
-app.delete('/api/profile/:email', (req, res) => {
-    const email = req.params.email;
-    // First delete user's messages
-    db.run('DELETE FROM messages WHERE sender = ? OR receiver = ?', [email, email]);
-    // Delete user's properties
-    db.run('DELETE FROM properties WHERE posted_by = ?', [email]);
-    // Delete user's requests
-    db.run('DELETE FROM requests WHERE posted_by = ?', [email]);
-    // Finally delete user
-    db.run('DELETE FROM users WHERE email = ?', [email], function(err) {
-        if (err) return res.json({ success: false, message: 'Delete failed' });
-        res.json({ success: true, message: 'Account deleted' });
-    });
-});
-
-
-// ==================== HEALTH & ROOT ====================
+// ============ HEALTH ============
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'HouseHunters API running' });
+    res.json({ status: 'ok' });
 });
 
-// Serve index.html for root path
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 HouseHunters server running on port ${PORT}`);
-    console.log(`📁 Static files being served from current directory`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
