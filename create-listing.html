@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Create Listing - HouseHunters</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .create-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-bottom: 80px;
+        }
+        .form-card {
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid #2e2f32;
+            position: relative;
+        }
+        .form-card h3 {
+            margin: 20px 0 12px 0;
+            font-size: 18px;
+        }
+        .form-card h3:first-of-type {
+            margin-top: 0;
+        }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px;
+            border-top: 1px solid #2e2f32;
+            z-index: 100;
+        }
+        .nav-item {
+            color: #6c6f72;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+        }
+        .nav-item i {
+            font-size: 22px;
+        }
+        .nav-item.active {
+            color: white;
+        }
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .form-row input, .form-row select {
+            flex: 1;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-family: inherit;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: white;
+        }
+        .btn {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+        .btn.primary {
+            background: white;
+            color: black;
+            width: 100%;
+        }
+        .btn.primary:hover {
+            background: #ddd;
+        }
+        .close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #2a2a2a;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .auth-head {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .logo-small {
+            width: 48px;
+            height: 48px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-weight: bold;
+            font-size: 20px;
+            color: black;
+        }
+        .subtext {
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="create-container">
+        <div class="form-card">
+            <button class="close-btn" onclick="goBack()">×</button>
+
+            <div class="auth-head">
+                <div class="logo-small">HH</div>
+                <h1>Create Listing</h1>
+                <p class="subtext">List your property for sale or rent</p>
+            </div>
+
+            <form id="createListingForm">
+                <h3>Basic Information</h3>
+                <input type="text" id="title" placeholder="Property Title" required>
+                <textarea id="description" placeholder="Property Description" rows="4" required></textarea>
+                
+                <div class="form-row">
+                    <input type="number" id="price" placeholder="Price (Pula)" required>
+                    <select id="type" required>
+                        <option value="">Property Type</option>
+                        <option value="apartments">Apartments</option>
+                        <option value="standalone">Standalone</option>
+                        <option value="multires">Multires</option>
+                        <option value="estate">Estate</option>
+                        <option value="plots">Plots</option>
+                        <option value="farms">Farms</option>
+                    </select>
+                </div>
+
+                <h3>Property Details</h3>
+                <div class="form-row">
+                    <input type="number" id="bedrooms" placeholder="Bedrooms">
+                    <input type="number" id="bathrooms" placeholder="Bathrooms">
+                    <input type="number" id="area" placeholder="Area (m²)">
+                </div>
+
+                <h3>Location</h3>
+                <input type="text" id="location" placeholder="Full Address, Botswana" required>
+
+                <button class="btn primary" type="submit">Create Listing</button>
+                <div id="formStatus" class="subtext" style="text-align: center; margin-top: 10px;"></div>
+            </form>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item" id="smartHomeBtn"><i class="fa-solid fa-home"></i><span>Home</span></a>
+        <a href="chat.html" class="nav-item"><i class="fa-solid fa-comments"></i><span>Chat</span></a>
+        <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+    </nav>
+
+    <script>
+        const API_BASE = 'https://househunters-backend-1.onrender.com/api';
+
+        function goBack() {
+            const role = localStorage.getItem('userRole') || 'buyer';
+            const pages = { buyer: 'buyer.html', seller: 'seller.html', agent: 'agent.html' };
+            window.location.href = pages[role] || 'index.html';
+        }
+
+        document.getElementById('createListingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const userEmail = localStorage.getItem('userEmail');
+            if (!userEmail) {
+                alert('❌ Please login to create listings');
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Get form values
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const price = document.getElementById('price').value;
+            const location = document.getElementById('location').value.trim();
+            const type = document.getElementById('type').value;
+            const bedrooms = document.getElementById('bedrooms').value;
+            const bathrooms = document.getElementById('bathrooms').value;
+            const area = document.getElementById('area').value;
+
+            // Validate
+            if (!title) { alert('❌ Please enter a property title'); return; }
+            if (!description) { alert('❌ Please enter a description'); return; }
+            if (!price) { alert('❌ Please enter a price'); return; }
+            if (!location) { alert('❌ Please enter a location'); return; }
+            if (!type) { alert('❌ Please select a property type'); return; }
+
+            const statusDiv = document.getElementById('formStatus');
+            statusDiv.innerHTML = '⏳ Creating listing...';
+            statusDiv.style.color = '#ffaa00';
+
+            try {
+                const response = await fetch(`${API_BASE}/properties`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title,
+                        description: description,
+                        price: parseFloat(price),
+                        location: location,
+                        type: type,
+                        bedrooms: parseInt(bedrooms) || 0,
+                        bathrooms: parseInt(bathrooms) || 0,
+                        area: parseFloat(area) || 0,
+                        postedBy: userEmail
+                    })
+                });
+
+                const result = await response.json();
+                console.log('Response:', result);
+
+                if (result.success) {
+                    statusDiv.innerHTML = '✅ Listing created! Redirecting...';
+                    statusDiv.style.color = '#4caf50';
+                    document.getElementById('createListingForm').reset();
+                    setTimeout(() => goBack(), 1500);
+                } else {
+                    statusDiv.innerHTML = '❌ ' + result.message;
+                    statusDiv.style.color = '#ef5350';
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = '❌ Network error: ' + error.message;
+                statusDiv.style.color = '#ef5350';
+                alert('Network error: ' + error.message);
+            }
+        });
+
+        // Page Load
+        document.addEventListener('DOMContentLoaded', function() {
+            const role = localStorage.getItem('userRole') || 'buyer';
+            const homeLinks = { buyer: 'buyer.html', seller: 'seller.html', agent: 'agent.html' };
+            const homeBtn = document.getElementById('smartHomeBtn');
+            if (homeBtn) homeBtn.href = homeLinks[role];
+            
+            if (!localStorage.getItem('userEmail')) {
+                alert('Please login to create a listing');
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+</body>
+</html>
