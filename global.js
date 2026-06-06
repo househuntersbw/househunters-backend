@@ -1,4 +1,4 @@
-// global.js - HouseHunters COMPLETE
+// global.js - HouseHunters COMPLETE (NO IMAGES)
 const API_BASE = 'https://househunters-backend-1.onrender.com/api';
 
 function toggleModal(id, show) {
@@ -21,6 +21,7 @@ function openTab(tabName) {
     });
 }
 
+// Load properties - NO IMAGES, just text
 async function loadProperties(type, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -50,10 +51,6 @@ async function loadProperties(type, containerId) {
         }
         
         container.innerHTML = properties.map(prop => {
-            const firstImage = prop.images ? prop.images.split(',')[0] : null;
-            const imageUrl = firstImage ? `https://househunters-backend-1.onrender.com/uploads/${firstImage}` : null;
-            const imageHtml = imageUrl ? `<img src="${imageUrl}" style="width:100%; height:180px; object-fit:cover; border-radius:12px 12px 0 0;" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%25%22 height=%22100%25%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%23333%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23666%22 dy=%22.3em%22%3ENo Image%3C/text%3E%3C/svg%3E'">` : `<div style="width:100%; height:180px; background:#222; display:flex; align-items:center; justify-content:center; border-radius:12px 12px 0 0;"><i class="fa-solid fa-image" style="font-size:48px; color:#444;"></i></div>`;
-            
             const isSaved = savedIds.includes(prop.id);
             const isOwner = prop.posted_by === userEmail;
             
@@ -119,9 +116,9 @@ async function loadProperties(type, containerId) {
                 }
             }
             
+            // Simple card - NO IMAGES
             return `
                 <div class="listing-card" style="overflow:hidden; cursor: pointer;" onclick="viewListingDetail(${prop.id})">
-                    ${imageHtml}
                     <div style="padding: 16px;">
                         <h3 style="margin:0 0 8px 0;">${escapeHtml(prop.title)}</h3>
                         <p class="property-price" style="font-size:1.25rem; font-weight:bold; margin:8px 0;">P${prop.price?.toLocaleString() || 0}</p>
@@ -153,15 +150,11 @@ async function viewListingDetail(propertyId) {
             return;
         }
         
-        const images = prop.images ? prop.images.split(',') : [];
-        const firstImage = images.length > 0 ? `https://househunters-backend-1.onrender.com/uploads/${images[0]}` : null;
-        
         const modalHtml = `
             <div id="detailModal" class="modal" style="display: flex; z-index: 2000;">
                 <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
                     <button class="close-btn" onclick="closeDetailModal()" style="position: absolute; top: 10px; right: 10px;">×</button>
                     <div style="text-align: center;">
-                        ${firstImage ? `<img src="${firstImage}" style="width:100%; max-height: 300px; object-fit: cover; border-radius: 12px; margin-bottom: 16px;">` : '<div style="height: 200px; background: #222; display: flex; align-items: center; justify-content: center; border-radius: 12px; margin-bottom: 16px;"><i class="fa-solid fa-image" style="font-size: 48px; color: #444;"></i></div>'}
                         <h2>${escapeHtml(prop.title)}</h2>
                         <p class="property-price" style="font-size: 24px; font-weight: bold;">P${prop.price?.toLocaleString() || 0}</p>
                         <p><i class="fa-solid fa-location-dot"></i> ${escapeHtml(prop.location) || 'Botswana'}</p>
@@ -210,7 +203,6 @@ function startChat(receiverEmail, propertyTitle) {
         return;
     }
     
-    console.log('Starting chat with:', receiverEmail);
     localStorage.setItem('chatReceiver', receiverEmail);
     if (propertyTitle) {
         localStorage.setItem('chatPropertyTitle', propertyTitle);
