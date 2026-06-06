@@ -3,44 +3,20 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const multer = require('multer');
 const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Use persistent disk path for Render, or local for development
-const DATA_DIR = process.env.RENDER ? '/opt/render/project/src/data' : __dirname;
-const DB_PATH = path.join(DATA_DIR, 'househunters.db');
-const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-const PROFILES_DIR = path.join(UPLOADS_DIR, 'profiles');
-
-// Ensure directories exist
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    console.log('✅ Created data directory at:', DATA_DIR);
-}
-if (!fs.existsSync(UPLOADS_DIR)) {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    console.log('✅ Created uploads directory');
-}
-if (!fs.existsSync(PROFILES_DIR)) {
-    fs.mkdirSync(PROFILES_DIR, { recursive: true });
-    console.log('✅ Created profiles directory');
-}
-
-// Middleware
+// Middleware - NO multer for images
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('.'));
 
-// Serve static files from the persistent disk
-app.use('/uploads', express.static(UPLOADS_DIR));
-
-// Database - using persistent path
-const db = new sqlite3.Database(DB_PATH);
-console.log('📁 Database path:', DB_PATH);
+// Database
+const db = new sqlite3.Database('./househunters.db');
+console.log('📁 Database path:', './househunters.db');
 
 // Create all tables
 db.serialize(() => {
@@ -71,7 +47,6 @@ db.serialize(() => {
         latitude REAL,
         longitude REAL,
         posted_by TEXT,
-        images TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
@@ -227,13 +202,13 @@ app.post('/api/reset-password-direct', async (req, res) => {
 });
 
 app.get('/api/users/agents', (req, res) => {
-    db.all('SELECT email, name, phone, location, profile_picture FROM users WHERE role = ? AND is_verified = 1', ['agent'], (err, agents) => {
+    db.all('SELECT email, name, phone, location FROM users WHERE role = ? AND is_verified = 1', ['agent'], (err, agents) => {
         res.json({ success: true, agents: agents || [] });
     });
 });
 
 app.get('/api/users/sellers', (req, res) => {
-    db.all('SELECT email, name, phone, location, profile_picture FROM users WHERE role = ? AND is_verified = 1', ['seller'], (err, sellers) => {
+    db.all('SELECT email, name, phone, location FROM users WHERE role = ? AND is_verified = 1', ['seller'], (err, sellers) => {
         res.json({ success: true, sellers: sellers || [] });
     });
 });
@@ -245,7 +220,7 @@ app.get('/api/users/buyers', (req, res) => {
 });
 
 app.get('/api/profile/:email', (req, res) => {
-    db.get('SELECT email, name, phone, location, role, profile_picture, created_at FROM users WHERE email = ?', [req.params.email], (err, user) => {
+    db.get('SELECT email, name, phone, location, role, created_at FROM users WHERE email = ?', [req.params.email], (err, user) => {
         if (!user) return res.json({ success: false, message: 'User not found' });
         res.json({ success: true, user });
     });
@@ -282,37 +257,9 @@ app.put('/api/profile/:email', (req, res) => {
             return res.json({ success: false, message: 'Update failed: ' + err.message });
         }
         
-        db.get('SELECT name, email, phone, location, role, profile_picture FROM users WHERE email = ?', [email], (err, user) => {
+        db.get('SELECT name, email, phone, location, role FROM users WHERE email = ?', [email], (err, user) => {
             res.json({ success: true, message: 'Profile updated', user: user || {} });
         });
-    });
-});
-
-const profileStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, PROFILES_DIR);
-    },
-    filename: (req, file, cb) => {
-        const cleanEmail = req.params.email.replace(/[^a-zA-Z0-9]/g, '_');
-        cb(null, cleanEmail + path.extname(file.originalname));
-    }
-});
-const profileUpload = multer({ storage: profileStorage, limits: { fileSize: 2 * 1024 * 1024 } });
-
-app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
-    if (!req.file) return res.json({ success: false, message: 'No file' });
-    const imageUrl = `/uploads/profiles/${req.file.filename}`;
-    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, req.params.email], (err) => {
-        if (err) {
-            return res.json({ success: false, message: 'Failed to save' });
-        }
-        res.json({ success: true, imageUrl: imageUrl });
-    });
-});
-
-app.get('/api/profile/:email/picture', (req, res) => {
-    db.get('SELECT profile_picture FROM users WHERE email = ?', [req.params.email], (err, user) => {
-        res.json({ success: true, imageUrl: user?.profile_picture || null });
     });
 });
 
@@ -355,119 +302,50 @@ app.get('/api/properties/:id', (req, res) => {
     });
 });
 
-// Configure multer for property images
-const propertyStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, UPLOADS_DIR);
-    },
-    filename: (req, file, cb) => {
-        const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
-        cb(null, uniqueName);
-    }
-});
-
-const propertyUpload = multer({ 
-    storage: propertyStorage, 
-    limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only images are allowed'), false);
-        }
-    }
-});
-
-// CREATE PROPERTY - Debug version
 app.post('/api/properties', (req, res) => {
-    propertyUpload.array('images', 4)(req, res, function(err) {
+    console.log('=== CREATE LISTING ===');
+    console.log('Body:', req.body);
+    
+    const { title, description, price, location, type, bedrooms, bathrooms, area, postedBy } = req.body;
+    
+    if (!title) return res.json({ success: false, message: 'Title is required' });
+    if (!price) return res.json({ success: false, message: 'Price is required' });
+    if (!location) return res.json({ success: false, message: 'Location is required' });
+    if (!type) return res.json({ success: false, message: 'Property type is required' });
+    if (!postedBy) return res.json({ success: false, message: 'User email is required' });
+    
+    const sql = `INSERT INTO properties 
+        (title, description, price, location, type, bedrooms, bathrooms, area, posted_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    
+    const values = [
+        title, description || '', parseFloat(price), location, type, 
+        parseInt(bedrooms) || 0, parseInt(bathrooms) || 0, parseFloat(area) || 0, 
+        postedBy
+    ];
+    
+    db.run(sql, values, function(err) {
         if (err) {
-            console.error('❌ Multer error:', err);
-            return res.json({ success: false, message: err.message });
+            console.error('❌ Database error:', err.message);
+            return res.json({ success: false, message: 'Database error: ' + err.message });
         }
         
-        console.log('=== CREATE LISTING ===');
-        console.log('Files:', req.files ? req.files.length : 0);
-        console.log('Body title:', req.body.title);
-        console.log('Body postedBy:', req.body.postedBy);
-        
-        const title = req.body.title;
-        const description = req.body.description || '';
-        const price = req.body.price;
-        const location = req.body.location;
-        const type = req.body.type;
-        const postedBy = req.body.postedBy;
-        const bedrooms = req.body.bedrooms || 0;
-        const bathrooms = req.body.bathrooms || 0;
-        const area = req.body.area || 0;
-        
-        let lat = null, lng = null;
-        if (req.body.coordinates) {
-            try {
-                const coords = JSON.parse(req.body.coordinates);
-                lat = coords.lat;
-                lng = coords.lng;
-            } catch(e) {}
-        }
-        
-        // Validate
-        if (!title) return res.json({ success: false, message: 'Title required' });
-        if (!price) return res.json({ success: false, message: 'Price required' });
-        if (!location) return res.json({ success: false, message: 'Location required' });
-        if (!type) return res.json({ success: false, message: 'Type required' });
-        if (!postedBy) return res.json({ success: false, message: 'User email required' });
-        
-        // Check for images
-        if (!req.files || req.files.length === 0) {
-            return res.json({ success: false, message: 'At least 1 image required' });
-        }
-        
-        const images = req.files.map(f => f.filename).join(',');
-        console.log('Images saved:', images);
-        
-        const sql = `INSERT INTO properties 
-            (title, description, price, location, type, bedrooms, bathrooms, area, posted_by, images, latitude, longitude)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        
-        const values = [
-            title, description, parseFloat(price), location, type, 
-            parseInt(bedrooms) || 0, parseInt(bathrooms) || 0, parseFloat(area) || 0, 
-            postedBy, images, lat, lng
-        ];
-        
-        db.run(sql, values, function(err) {
-            if (err) {
-                console.error('❌ DB Error:', err.message);
-                return res.json({ success: false, message: 'DB error: ' + err.message });
-            }
-            
-            console.log('✅ Created! ID:', this.lastID);
-            res.json({ success: true, message: 'Listing created!', propertyId: this.lastID });
-        });
+        console.log('✅ Listing created! ID:', this.lastID);
+        res.json({ success: true, message: 'Listing created successfully!', propertyId: this.lastID });
     });
 });
 
 app.delete('/api/properties/:id', (req, res) => {
     const { email } = req.body;
-    if (!email) {
-        return res.json({ success: false, message: 'Email required' });
-    }
+    if (!email) return res.json({ success: false, message: 'Email required' });
     
     db.get('SELECT posted_by FROM properties WHERE id = ?', [req.params.id], (err, prop) => {
-        if (err) {
-            return res.json({ success: false, message: 'Database error' });
-        }
-        if (!prop) {
-            return res.json({ success: false, message: 'Property not found' });
-        }
-        if (prop.posted_by !== email) {
-            return res.json({ success: false, message: 'Unauthorized' });
-        }
+        if (err) return res.json({ success: false, message: 'Database error' });
+        if (!prop) return res.json({ success: false, message: 'Property not found' });
+        if (prop.posted_by !== email) return res.json({ success: false, message: 'Unauthorized' });
         
         db.run('DELETE FROM properties WHERE id = ?', [req.params.id], function(err) {
-            if (err) {
-                return res.json({ success: false, message: 'Delete failed' });
-            }
+            if (err) return res.json({ success: false, message: 'Delete failed' });
             res.json({ success: true, message: 'Listing deleted' });
         });
     });
@@ -476,12 +354,12 @@ app.delete('/api/properties/:id', (req, res) => {
 app.get('/api/my-properties/:email', (req, res) => {
     const email = req.params.email;
     db.all('SELECT * FROM properties WHERE posted_by = ? ORDER BY created_at DESC', [email], (err, rows) => {
-        if (err) {
-            return res.json({ success: false, properties: [] });
-        }
+        if (err) return res.json({ success: false, properties: [] });
         res.json({ success: true, properties: rows || [] });
     });
 });
+
+// ============ SAVED LISTINGS ============
 
 app.get('/api/saved-listings/:email', (req, res) => {
     const buyerEmail = req.params.email;
@@ -499,9 +377,7 @@ app.get('/api/saved-listings/:email', (req, res) => {
 
 app.post('/api/saved-listings', (req, res) => {
     const { buyer_email, property_id } = req.body;
-    if (!buyer_email || !property_id) {
-        return res.json({ success: false, message: 'Missing buyer_email or property_id' });
-    }
+    if (!buyer_email || !property_id) return res.json({ success: false, message: 'Missing fields' });
     db.run(`INSERT OR IGNORE INTO saved_listings (buyer_email, property_id) VALUES (?, ?)`, 
         [buyer_email, property_id], function(err) {
             if (err) return res.json({ success: false, message: 'Failed to save' });
@@ -516,6 +392,8 @@ app.delete('/api/saved-listings/:email/:propertyId', (req, res) => {
         res.json({ success: true, message: 'Removed from saved' });
     });
 });
+
+// ============ CONNECTIONS ============
 
 app.get('/api/connections/:email', (req, res) => {
     const email = req.params.email;
@@ -548,11 +426,11 @@ app.get('/api/connections/:email', (req, res) => {
     });
 });
 
+// ============ INQUIRIES ============
+
 app.post('/api/inquiries', (req, res) => {
     const { buyer_email, seller_email, property_id, message } = req.body;
-    if (!buyer_email || !seller_email || !message) {
-        return res.json({ success: false, message: 'Missing fields' });
-    }
+    if (!buyer_email || !seller_email || !message) return res.json({ success: false, message: 'Missing fields' });
     db.run(`INSERT INTO inquiries (buyer_email, seller_email, property_id, message) VALUES (?,?,?,?)`,
         [buyer_email, seller_email, property_id || null, message], function(err) {
             if (err) return res.json({ success: false, message: 'Failed to send inquiry' });
@@ -574,6 +452,8 @@ app.get('/api/inquiries/:email', (req, res) => {
         res.json({ success: true, inquiries: inquiries || [] });
     });
 });
+
+// ============ CHAT ENDPOINTS ============
 
 app.get('/api/conversations/:email', (req, res) => {
     const email = req.params.email;
@@ -609,6 +489,8 @@ app.post('/api/messages', (req, res) => {
     });
 });
 
+// ============ REQUESTS ============
+
 app.get('/api/requests', (req, res) => {
     db.all('SELECT * FROM requests ORDER BY created_at DESC', [], (err, rows) => {
         res.json({ success: true, requests: rows || [] });
@@ -626,8 +508,10 @@ app.post('/api/requests', (req, res) => {
         });
 });
 
+// ============ HEALTH & ROOT ============
+
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), dbPath: DB_PATH });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.get('/', (req, res) => {
@@ -636,7 +520,5 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📁 Data directory: ${DATA_DIR}`);
-    console.log(`📁 Database: ${DB_PATH}`);
-    console.log(`📁 Uploads: ${UPLOADS_DIR}`);
+    console.log(`✅ All features working - NO IMAGES`);
 });
