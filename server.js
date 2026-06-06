@@ -23,7 +23,9 @@ if (!fs.existsSync('uploads/profiles')) fs.mkdirSync('uploads/profiles', { recur
 // Database
 const db = new sqlite3.Database('./househunters.db');
 
+// Create ALL tables
 db.serialize(() => {
+    // Users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE,
@@ -38,6 +40,7 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Properties table
     db.run(`CREATE TABLE IF NOT EXISTS properties (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
@@ -55,6 +58,7 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Messages table
     db.run(`CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender TEXT,
@@ -65,6 +69,7 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Requests table
     db.run(`CREATE TABLE IF NOT EXISTS requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
@@ -77,12 +82,43 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    console.log('✅ Database ready');
+    // NEW: Saved listings table (for buyers)
+    db.run(`CREATE TABLE IF NOT EXISTS saved_listings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        buyer_email TEXT,
+        property_id INTEGER,
+        saved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(buyer_email, property_id)
+    )`);
+
+    // NEW: Connections table (tracks who connected with whom)
+    db.run(`CREATE TABLE IF NOT EXISTS connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user1_email TEXT,
+        user2_email TEXT,
+        connected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user1_email, user2_email)
+    )`);
+
+    // NEW: Inquiries table (buyer inquiries to sellers)
+    db.run(`CREATE TABLE IF NOT EXISTS inquiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        buyer_email TEXT,
+        seller_email TEXT,
+        property_id INTEGER,
+        message TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    console.log('✅ All database tables ready');
 });
 
+// Helper function
 function generateOTP() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
-// ============ AUTH ============
+// ============ AUTH ENDPOINTS ============
+
 app.post('/api/register', async (req, res) => {
     const { name, email, phone, password, location, role } = req.body;
     if (!name || !email || !password) return res.json({ success: false, message: 'Missing fields' });
@@ -127,12 +163,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-app.get('/api/check-verification/:email', (req, res) => {
-    db.get('SELECT is_verified FROM users WHERE email = ?', [req.params.email], (err, user) => {
-        res.json({ success: true, verified: user ? user.is_verified === 1 : false });
-    });
-});
-
 app.post('/api/forgot-password', (req, res) => {
     const { email } = req.body;
     const otp = generateOTP();
@@ -161,7 +191,31 @@ app.post('/api/reset-password', async (req, res) => {
     });
 });
 
-// ============ PROFILE ============
+// ============ NEW: USER LIST ENDPOINTS (for agents/sellers to appear) ============
+
+app.get('/api/users/agents', (req, res) => {
+    db.all('SELECT email, name, phone, location, profile_picture FROM users WHERE role = ? AND is_verified = 1', ['agent'], (err, agents) => {
+        if (err) return res.json({ success: false, agents: [] });
+        res.json({ success: true, agents: agents || [] });
+    });
+});
+
+app.get('/api/users/sellers', (req, res) => {
+    db.all('SELECT email, name, phone, location, profile_picture FROM users WHERE role = ? AND is_verified = 1', ['seller'], (err, sellers) => {
+        if (err) return res.json({ success: false, sellers: [] });
+        res.json({ success: true, sellers: sellers || [] });
+    });
+});
+
+app.get('/api/users/buyers', (req, res) => {
+    db.all('SELECT email, name, phone, location FROM users WHERE role = ? AND is_verified = 1', ['buyer'], (err, buyers) => {
+        if (err) return res.json({ success: false, buyers: [] });
+        res.json({ success: true, buyers: buyers || [] });
+    });
+});
+
+// ============ PROFILE ENDPOINTS ============
+
 app.get('/api/profile/:email', (req, res) => {
     db.get('SELECT email, name, phone, location, role, profile_picture, created_at FROM users WHERE email = ?', [req.params.email], (err, user) => {
         if (!user) return res.json({ success: false, message: 'User not found' });
@@ -173,21 +227,24 @@ app.put('/api/profile/:email', (req, res) => {
     const { name, location, phone } = req.body;
     db.run('UPDATE users SET name = ?, location = ?, phone = ? WHERE email = ?', [name, location, phone, req.params.email], function(err) {
         if (err) return res.json({ success: false, message: 'Update failed' });
-        res.json({ success: true, message: 'Profile updated' });
+        res.json({ success: true, message: 'Profile updated', user: { name, location, phone } });
     });
 });
 
 const profileStorage = multer.diskStorage({
     destination: 'uploads/profiles/',
     filename: (req, file, cb) => {
-        cb(null, req.params.email.replace(/[^a-zA-Z0-9]/g, '_') + path.extname(file.originalname));
+        const cleanEmail = req.params.email.replace(/[^a-zA-Z0-9]/g, '_');
+        cb(null, cleanEmail + path.extname(file.originalname));
     }
 });
 const profileUpload = multer({ storage: profileStorage, limits: { fileSize: 2 * 1024 * 1024 } });
 
 app.post('/api/profile/:email/picture', profileUpload.single('profilePic'), (req, res) => {
     if (!req.file) return res.json({ success: false, message: 'No file' });
-    res.json({ success: true, imageUrl: `/uploads/profiles/${req.file.filename}` });
+    const imageUrl = `/uploads/profiles/${req.file.filename}`;
+    db.run('UPDATE users SET profile_picture = ? WHERE email = ?', [imageUrl, req.params.email]);
+    res.json({ success: true, imageUrl: imageUrl });
 });
 
 app.get('/api/profile/:email/picture', (req, res) => {
@@ -201,12 +258,16 @@ app.delete('/api/profile/:email', (req, res) => {
     db.run('DELETE FROM messages WHERE sender = ? OR receiver = ?', [email, email]);
     db.run('DELETE FROM properties WHERE posted_by = ?', [email]);
     db.run('DELETE FROM requests WHERE posted_by = ?', [email]);
+    db.run('DELETE FROM saved_listings WHERE buyer_email = ?', [email]);
+    db.run('DELETE FROM connections WHERE user1_email = ? OR user2_email = ?', [email, email]);
+    db.run('DELETE FROM inquiries WHERE buyer_email = ? OR seller_email = ?', [email, email]);
     db.run('DELETE FROM users WHERE email = ?', [email], function(err) {
         res.json({ success: true, message: 'Account deleted' });
     });
 });
 
-// ============ PROPERTIES ============
+// ============ PROPERTIES ENDPOINTS ============
+
 app.get('/api/properties', (req, res) => {
     const { type } = req.query;
     let sql = 'SELECT * FROM properties ORDER BY created_at DESC';
@@ -236,13 +297,21 @@ const propertyStorage = multer.diskStorage({
 const propertyUpload = multer({ storage: propertyStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 app.post('/api/properties', propertyUpload.array('images', 4), (req, res) => {
-    const { title, description, price, location, type, bedrooms, bathrooms, area, postedBy } = req.body;
+    const { title, description, price, location, type, bedrooms, bathrooms, area, postedBy, coordinates } = req.body;
     const images = req.files ? req.files.map(f => f.path).join(',') : '';
-    db.run(`INSERT INTO properties (title, description, price, location, type, bedrooms, bathrooms, area, posted_by, images)
-            VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [title, description || '', price, location || '', type || 'apartments', bedrooms || 0, bathrooms || 0, area || 0, postedBy, images],
+    let lat = null, lng = null;
+    if (coordinates) {
+        try {
+            const coord = JSON.parse(coordinates);
+            lat = coord.lat;
+            lng = coord.lng;
+        } catch(e) {}
+    }
+    db.run(`INSERT INTO properties (title, description, price, location, type, bedrooms, bathrooms, area, posted_by, images, latitude, longitude)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [title, description || '', price, location || '', type || 'apartments', bedrooms || 0, bathrooms || 0, area || 0, postedBy, images, lat, lng],
         function(err) {
-            if (err) return res.json({ success: false, message: 'Failed' });
+            if (err) return res.json({ success: false, message: 'Failed: ' + err.message });
             res.json({ success: true, message: 'Listing created!', propertyId: this.lastID });
         });
 });
@@ -263,7 +332,107 @@ app.get('/api/my-properties/:email', (req, res) => {
     });
 });
 
-// ============ CHAT ============
+// ============ NEW: SAVED LISTINGS ENDPOINTS ============
+
+app.get('/api/saved-listings/:email', (req, res) => {
+    const buyerEmail = req.params.email;
+    db.all(`
+        SELECT p.*, s.saved_at 
+        FROM saved_listings s 
+        JOIN properties p ON s.property_id = p.id 
+        WHERE s.buyer_email = ? 
+        ORDER BY s.saved_at DESC
+    `, [buyerEmail], (err, listings) => {
+        if (err) return res.json({ success: false, listings: [] });
+        res.json({ success: true, listings: listings || [] });
+    });
+});
+
+app.post('/api/saved-listings', (req, res) => {
+    const { buyer_email, property_id } = req.body;
+    if (!buyer_email || !property_id) {
+        return res.json({ success: false, message: 'Missing buyer_email or property_id' });
+    }
+    db.run(`INSERT OR IGNORE INTO saved_listings (buyer_email, property_id) VALUES (?, ?)`, 
+        [buyer_email, property_id], function(err) {
+            if (err) return res.json({ success: false, message: 'Failed to save' });
+            res.json({ success: true, message: 'Listing saved!' });
+        });
+});
+
+app.delete('/api/saved-listings/:email/:propertyId', (req, res) => {
+    const { email, propertyId } = req.params;
+    db.run('DELETE FROM saved_listings WHERE buyer_email = ? AND property_id = ?', [email, propertyId], function(err) {
+        if (err) return res.json({ success: false, message: 'Failed to remove' });
+        res.json({ success: true, message: 'Removed from saved' });
+    });
+});
+
+// ============ NEW: CONNECTIONS ENDPOINTS ============
+
+app.get('/api/connections/:email', (req, res) => {
+    const email = req.params.email;
+    db.all(`
+        SELECT DISTINCT 
+            CASE WHEN sender = ? THEN receiver ELSE sender END as other_email,
+            MAX(created_at) as last_message
+        FROM messages 
+        WHERE sender = ? OR receiver = ?
+        GROUP BY other_email
+        ORDER BY last_message DESC
+    `, [email, email, email], (err, connections) => {
+        if (err) return res.json({ success: false, connections: [] });
+        
+        // Get names for each connection
+        const emails = connections.map(c => c.other_email);
+        if (emails.length === 0) return res.json({ success: true, connections: [] });
+        
+        const placeholders = emails.map(() => '?').join(',');
+        db.all(`SELECT email, name FROM users WHERE email IN (${placeholders})`, emails, (err, users) => {
+            const userMap = {};
+            users.forEach(u => userMap[u.email] = u.name || u.email.split('@')[0]);
+            
+            const enriched = connections.map(c => ({
+                email: c.other_email,
+                name: userMap[c.other_email] || c.other_email.split('@')[0],
+                last_message: c.last_message
+            }));
+            res.json({ success: true, connections: enriched });
+        });
+    });
+});
+
+// ============ NEW: INQUIRIES ENDPOINTS ============
+
+app.post('/api/inquiries', (req, res) => {
+    const { buyer_email, seller_email, property_id, message } = req.body;
+    if (!buyer_email || !seller_email || !message) {
+        return res.json({ success: false, message: 'Missing fields' });
+    }
+    db.run(`INSERT INTO inquiries (buyer_email, seller_email, property_id, message) VALUES (?,?,?,?)`,
+        [buyer_email, seller_email, property_id || null, message], function(err) {
+            if (err) return res.json({ success: false, message: 'Failed to send inquiry' });
+            res.json({ success: true, message: 'Inquiry sent to seller!' });
+        });
+});
+
+app.get('/api/inquiries/:email', (req, res) => {
+    const sellerEmail = req.params.email;
+    db.all(`
+        SELECT i.*, p.title as property_title, u.name as buyer_name 
+        FROM inquiries i
+        LEFT JOIN properties p ON i.property_id = p.id
+        LEFT JOIN users u ON i.buyer_email = u.email
+        WHERE i.seller_email = ?
+        ORDER BY i.created_at DESC
+    `, [sellerEmail], (err, inquiries) => {
+        if (err) return res.json({ success: false, inquiries: [] });
+        res.json({ success: true, inquiries: inquiries || [] });
+    });
+});
+
+// ============ CHAT ENDPOINTS ============
+
 app.get('/api/conversations/:email', (req, res) => {
     const email = req.params.email;
     db.all(`
@@ -288,13 +457,21 @@ app.get('/api/messages/:user1/:user2', (req, res) => {
 app.post('/api/messages', (req, res) => {
     const { sender, receiver, message } = req.body;
     if (!sender || !receiver || !message) return res.json({ success: false, message: 'Missing fields' });
+    
+    // Auto-create connection
+    db.run(`INSERT OR IGNORE INTO connections (user1_email, user2_email) VALUES (?, ?)`, 
+        [sender, receiver]);
+    db.run(`INSERT OR IGNORE INTO connections (user1_email, user2_email) VALUES (?, ?)`, 
+        [receiver, sender]);
+    
     db.run(`INSERT INTO messages (sender, receiver, message) VALUES (?,?,?)`, [sender, receiver, message], function(err) {
         if (err) return res.json({ success: false, message: 'Failed' });
         res.json({ success: true, message: 'Sent', messageId: this.lastID });
     });
 });
 
-// ============ REQUESTS ============
+// ============ REQUESTS ENDPOINTS ============
+
 app.get('/api/requests', (req, res) => {
     db.all('SELECT * FROM requests ORDER BY created_at DESC', [], (err, rows) => {
         res.json({ success: true, requests: rows || [] });
@@ -313,8 +490,9 @@ app.post('/api/requests', (req, res) => {
 });
 
 // ============ HEALTH ============
+
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.get('/', (req, res) => {
@@ -323,4 +501,7 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`✅ Agents endpoint: GET /api/users/agents`);
+    console.log(`✅ Sellers endpoint: GET /api/users/sellers`);
+    console.log(`✅ Saved listings endpoint: GET /api/saved-listings/:email`);
 });
