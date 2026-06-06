@@ -52,18 +52,15 @@ async function loadProperties(type, containerId) {
         
         container.innerHTML = properties.map(prop => {
             const firstImage = prop.images ? prop.images.split(',')[0] : null;
-            // FIXED: Simple image URL
             const imageUrl = firstImage ? `https://househunters-backend-1.onrender.com/uploads/${firstImage}` : null;
             const imageHtml = imageUrl ? `<img src="${imageUrl}" style="width:100%; height:180px; object-fit:cover; border-radius:12px 12px 0 0;" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%25%22 height=%22100%25%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%23333%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23666%22 dy=%22.3em%22%3ENo Image%3C/text%3E%3C/svg%3E'">` : `<div style="width:100%; height:180px; background:#222; display:flex; align-items:center; justify-content:center; border-radius:12px 12px 0 0;"><i class="fa-solid fa-image" style="font-size:48px; color:#444;"></i></div>`;
             
             const isSaved = savedIds.includes(prop.id);
             const isOwner = prop.posted_by === userEmail;
             
-            // Different button sets for different roles
             let actionButtons = '';
             
             if (userRole === 'buyer') {
-                // BUYER: Save, Chat, Inquire Seller
                 actionButtons = `
                     <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
                         <button class="btn small" onclick="saveListing(${prop.id})" id="saveBtn_${prop.id}" style="${isSaved ? 'background:#2e7d32; color:white;' : ''}">
@@ -80,7 +77,6 @@ async function loadProperties(type, containerId) {
             } 
             else if (userRole === 'seller') {
                 if (isOwner) {
-                    // SELLER owns this listing: Delete only
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
                             <button class="btn small danger" onclick="deleteListing(${prop.id})">
@@ -89,7 +85,6 @@ async function loadProperties(type, containerId) {
                         </div>
                     `;
                 } else {
-                    // SELLER viewing other's listing: Chat, Inquire
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
                             <button class="btn small" onclick="startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
@@ -104,7 +99,6 @@ async function loadProperties(type, containerId) {
             }
             else if (userRole === 'agent') {
                 if (isOwner) {
-                    // AGENT owns this listing: Delete only
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
                             <button class="btn small danger" onclick="deleteListing(${prop.id})">
@@ -113,7 +107,6 @@ async function loadProperties(type, containerId) {
                         </div>
                     `;
                 } else {
-                    // AGENT viewing other's listing: Chat, Inquire
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
                             <button class="btn small" onclick="startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
@@ -127,8 +120,9 @@ async function loadProperties(type, containerId) {
                 }
             }
             
+            // FIXED: Added cursor pointer and onclick for clickable card
             return `
-                <div class="listing-card" style="overflow:hidden;">
+                <div class="listing-card" style="overflow:hidden; cursor: pointer;" onclick="viewListingDetail(${prop.id})">
                     ${imageHtml}
                     <div style="padding: 16px;">
                         <h3 style="margin:0 0 8px 0;">${escapeHtml(prop.title)}</h3>
@@ -137,7 +131,9 @@ async function loadProperties(type, containerId) {
                         ${prop.bedrooms ? `<p style="margin:4px 0;"><i class="fa-solid fa-bed"></i> ${prop.bedrooms} beds</p>` : ''}
                         ${prop.bathrooms ? `<p style="margin:4px 0;"><i class="fa-solid fa-bath"></i> ${prop.bathrooms} baths</p>` : ''}
                         <small style="color:#888;">${escapeHtml(prop.description?.substring(0, 100))}...</small>
-                        ${actionButtons}
+                        <div onclick="event.stopPropagation()">
+                            ${actionButtons}
+                        </div>
                     </div>
                 </div>
             `;
@@ -148,7 +144,63 @@ async function loadProperties(type, containerId) {
     }
 }
 
-// Add this NEW function for starting chat
+// ============ VIEW LISTING DETAIL MODAL ============
+async function viewListingDetail(propertyId) {
+    try {
+        const response = await fetch(`${API_BASE}/properties/${propertyId}`);
+        const data = await response.json();
+        const prop = data.property;
+        
+        if (!prop) {
+            alert('Property not found');
+            return;
+        }
+        
+        const images = prop.images ? prop.images.split(',') : [];
+        const firstImage = images.length > 0 ? `https://househunters-backend-1.onrender.com/uploads/${images[0]}` : null;
+        
+        const modalHtml = `
+            <div id="detailModal" class="modal" style="display: flex; z-index: 2000;">
+                <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+                    <button class="close-btn" onclick="closeDetailModal()" style="position: absolute; top: 10px; right: 10px;">×</button>
+                    <div style="text-align: center;">
+                        ${firstImage ? `<img src="${firstImage}" style="width:100%; max-height: 300px; object-fit: cover; border-radius: 12px; margin-bottom: 16px;">` : '<div style="height: 200px; background: #222; display: flex; align-items: center; justify-content: center; border-radius: 12px; margin-bottom: 16px;"><i class="fa-solid fa-image" style="font-size: 48px; color: #444;"></i></div>'}
+                        <h2>${escapeHtml(prop.title)}</h2>
+                        <p class="property-price" style="font-size: 24px; font-weight: bold;">P${prop.price?.toLocaleString() || 0}</p>
+                        <p><i class="fa-solid fa-location-dot"></i> ${escapeHtml(prop.location) || 'Botswana'}</p>
+                        ${prop.bedrooms ? `<p><i class="fa-solid fa-bed"></i> ${prop.bedrooms} bedrooms</p>` : ''}
+                        ${prop.bathrooms ? `<p><i class="fa-solid fa-bath"></i> ${prop.bathrooms} bathrooms</p>` : ''}
+                        ${prop.area ? `<p><i class="fa-solid fa-arrows-up-down-left-right"></i> ${prop.area} m²</p>` : ''}
+                        <hr style="border-color: #333; margin: 16px 0;">
+                        <h3>Description</h3>
+                        <p style="text-align: left;">${escapeHtml(prop.description)}</p>
+                        <hr style="border-color: #333; margin: 16px 0;">
+                        <p><small>Posted by: ${escapeHtml(prop.posted_by)}</small></p>
+                        <p><small>Listed on: ${new Date(prop.created_at).toLocaleDateString()}</small></p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingModal = document.getElementById('detailModal');
+        if (existingModal) existingModal.remove();
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        document.body.style.overflow = 'hidden';
+        
+    } catch (error) {
+        console.error('Error loading property details:', error);
+        alert('Error loading property details');
+    }
+}
+
+function closeDetailModal() {
+    const modal = document.getElementById('detailModal');
+    if (modal) modal.remove();
+    document.body.style.overflow = '';
+}
+
+// ============ CHAT FUNCTION ============
 function startChat(receiverEmail, propertyTitle) {
     const currentUser = localStorage.getItem('userEmail');
     if (!currentUser) {
@@ -157,14 +209,20 @@ function startChat(receiverEmail, propertyTitle) {
         return;
     }
     
-    // Store the receiver info in localStorage so chat.html can use it
-    localStorage.setItem('chatReceiver', receiverEmail);
-    localStorage.setItem('chatPropertyTitle', propertyTitle);
+    if (currentUser === receiverEmail) {
+        alert('You cannot chat with yourself');
+        return;
+    }
     
-    // Redirect to chat page
+    localStorage.setItem('chatReceiver', receiverEmail);
+    if (propertyTitle) {
+        localStorage.setItem('chatPropertyTitle', propertyTitle);
+    }
+    
     window.location.href = 'chat.html';
 }
 
+// ============ SAVE LISTING ============
 async function saveListing(propertyId) {
     const userEmail = localStorage.getItem('userEmail');
     if (!userEmail) {
@@ -209,6 +267,7 @@ async function unsaveListing(propertyId) {
     }
 }
 
+// ============ INQUIRY ============
 function openInquiryModal(propertyId, propertyTitle, ownerEmail, ownerRole) {
     const modal = document.getElementById('inquiryModal');
     if (!modal) return;
@@ -262,6 +321,7 @@ async function sendInquiry() {
     }
 }
 
+// ============ LOAD SAVED LISTINGS ============
 async function loadSavedListings() {
     const container = document.getElementById('savedContainer');
     if (!container) return;
@@ -288,6 +348,7 @@ async function loadSavedListings() {
     }
 }
 
+// ============ LOAD AGENTS LIST ============
 async function loadAgentsList() {
     const container = document.getElementById('agentsContainer');
     if (!container) return;
@@ -315,6 +376,7 @@ async function loadAgentsList() {
     }
 }
 
+// ============ LOAD SELLERS LIST ============
 async function loadSellersList() {
     const container = document.getElementById('sellersContainer');
     if (!container) return;
@@ -342,6 +404,7 @@ async function loadSellersList() {
     }
 }
 
+// ============ LOAD MY LISTINGS ============
 async function loadMyListings() {
     const email = localStorage.getItem('userEmail');
     const container = document.getElementById('myListings');
@@ -769,31 +832,10 @@ function initTheme() {
     }
 }
 
-function startChat(receiverEmail, propertyTitle) {
-    const currentUser = localStorage.getItem('userEmail');
-    if (!currentUser) {
-        alert('Please login to chat');
-        window.location.href = 'login.html';
-        return;
-    }
-    
-    if (currentUser === receiverEmail) {
-        alert('You cannot chat with yourself');
-        return;
-    }
-    
-    // Store the receiver info in localStorage so chat.html can use it
-    localStorage.setItem('chatReceiver', receiverEmail);
-    if (propertyTitle) {
-        localStorage.setItem('chatPropertyTitle', propertyTitle);
-    }
-    
-    // Redirect to chat page
-    window.location.href = 'chat.html';
-}
-
-// Make all functions global (add startChat to this list)
+// ============ WINDOW EXPORTS ============
 window.startChat = startChat;
+window.viewListingDetail = viewListingDetail;
+window.closeDetailModal = closeDetailModal;
 window.toggleModal = toggleModal;
 window.openTab = openTab;
 window.saveListing = saveListing;
