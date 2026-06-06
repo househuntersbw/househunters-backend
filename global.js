@@ -1,6 +1,8 @@
 // global.js - HouseHunters COMPLETE (NO IMAGES)
 const API_BASE = 'https://househunters-backend-1.onrender.com/api';
 
+console.log('=== GLOBAL.JS LOADED ===');
+
 function toggleModal(id, show) {
     const el = document.getElementById(id);
     if (el) el.style.display = show ? 'flex' : 'none';
@@ -59,13 +61,13 @@ async function loadProperties(type, containerId) {
             if (userRole === 'buyer') {
                 actionButtons = `
                     <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
-                        <button class="btn small" onclick="window.saveListing(${prop.id})" id="saveBtn_${prop.id}" style="${isSaved ? 'background:#2e7d32; color:white;' : ''}">
+                        <button type="button" class="btn small" onclick="window.saveListing(${prop.id})" id="saveBtn_${prop.id}" style="${isSaved ? 'background:#2e7d32; color:white;' : ''}">
                             <i class="fa-solid ${isSaved ? 'fa-check' : 'fa-bookmark'}"></i> ${isSaved ? 'Saved' : 'Save'}
                         </button>
-                        <button class="btn small" onclick="window.startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
+                        <button type="button" class="btn small" onclick="window.startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
                             <i class="fa-solid fa-comment"></i> Chat
                         </button>
-                        <button class="btn small primary" onclick="window.openInquiryModal(${prop.id}, '${escapeHtml(prop.title)}', '${prop.posted_by}', 'seller')">
+                        <button type="button" class="btn small primary" onclick="window.openInquiryModal(${prop.id}, '${escapeHtml(prop.title)}', '${prop.posted_by}', 'seller')">
                             <i class="fa-solid fa-question"></i> Inquire
                         </button>
                     </div>
@@ -75,7 +77,7 @@ async function loadProperties(type, containerId) {
                 if (isOwner) {
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
-                            <button class="btn small danger" onclick="window.deleteListing(${prop.id})">
+                            <button type="button" class="btn small danger" onclick="window.deleteListing(${prop.id})">
                                 <i class="fa-solid fa-trash"></i> Delete
                             </button>
                         </div>
@@ -83,10 +85,10 @@ async function loadProperties(type, containerId) {
                 } else {
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
-                            <button class="btn small" onclick="window.startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
+                            <button type="button" class="btn small" onclick="window.startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
                                 <i class="fa-solid fa-comment"></i> Chat
                             </button>
-                            <button class="btn small primary" onclick="window.openInquiryModal(${prop.id}, '${escapeHtml(prop.title)}', '${prop.posted_by}', 'seller')">
+                            <button type="button" class="btn small primary" onclick="window.openInquiryModal(${prop.id}, '${escapeHtml(prop.title)}', '${prop.posted_by}', 'seller')">
                                 <i class="fa-solid fa-question"></i> Inquire
                             </button>
                         </div>
@@ -97,7 +99,7 @@ async function loadProperties(type, containerId) {
                 if (isOwner) {
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
-                            <button class="btn small danger" onclick="window.deleteListing(${prop.id})">
+                            <button type="button" class="btn small danger" onclick="window.deleteListing(${prop.id})">
                                 <i class="fa-solid fa-trash"></i> Delete
                             </button>
                         </div>
@@ -105,10 +107,10 @@ async function loadProperties(type, containerId) {
                 } else {
                     actionButtons = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
-                            <button class="btn small" onclick="window.startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
+                            <button type="button" class="btn small" onclick="window.startChat('${prop.posted_by}', '${escapeHtml(prop.title)}')">
                                 <i class="fa-solid fa-comment"></i> Chat
                             </button>
-                            <button class="btn small primary" onclick="window.openInquiryModal(${prop.id}, '${escapeHtml(prop.title)}', '${prop.posted_by}', 'seller')">
+                            <button type="button" class="btn small primary" onclick="window.openInquiryModal(${prop.id}, '${escapeHtml(prop.title)}', '${prop.posted_by}', 'seller')">
                                 <i class="fa-solid fa-question"></i> Inquire
                             </button>
                         </div>
@@ -215,7 +217,7 @@ function startChat(receiverEmail, propertyTitle) {
 
 // Save listing
 async function saveListing(propertyId) {
-    console.log('saveListing called for:', propertyId);
+    console.log('saveListing called for property:', propertyId);
     const userEmail = localStorage.getItem('userEmail');
     if (!userEmail) {
         alert('Please login to save listings');
@@ -266,6 +268,7 @@ function openInquiryModal(propertyId, propertyTitle, ownerEmail, ownerRole) {
     const modal = document.getElementById('inquiryModal');
     if (!modal) {
         console.error('inquiryModal not found');
+        alert('Modal not found. Please refresh the page.');
         return;
     }
     
@@ -824,18 +827,17 @@ function initTheme() {
     }
 }
 
-// Make ALL functions available globally with window.
-window.startChat = startChat;
-window.viewListingDetail = viewListingDetail;
-window.closeDetailModal = closeDetailModal;
+// ============ FORCE ALL FUNCTIONS TO BE GLOBAL ============
 window.saveListing = saveListing;
-window.unsaveListing = unsaveListing;
+window.startChat = startChat;
 window.openInquiryModal = openInquiryModal;
 window.sendInquiry = sendInquiry;
 window.deleteListing = deleteListing;
-window.deleteAgentListing = deleteAgentListing;
+window.viewListingDetail = viewListingDetail;
+window.closeDetailModal = closeDetailModal;
 window.toggleModal = toggleModal;
 window.openTab = openTab;
+window.unsaveListing = unsaveListing;
 window.loadSavedListings = loadSavedListings;
 window.loadAgentsList = loadAgentsList;
 window.loadSellersList = loadSellersList;
@@ -845,6 +847,7 @@ window.loadInquiries = loadInquiries;
 window.loadMyListings = loadMyListings;
 window.loadSellerAgentsList = loadSellerAgentsList;
 window.loadAgentInquiries = loadAgentInquiries;
+window.deleteAgentListing = deleteAgentListing;
 window.postBuyerRequest = postBuyerRequest;
 window.postSellerRequest = postSellerRequest;
 window.postAgentRequest = postAgentRequest;
@@ -853,6 +856,11 @@ window.getCurrentUser = getCurrentUser;
 window.setupSmartNav = setupSmartNav;
 window.initTheme = initTheme;
 window.applyTheme = applyTheme;
+
+console.log('✅ All functions registered to window object');
+console.log('✅ startChat available:', typeof window.startChat === 'function');
+console.log('✅ saveListing available:', typeof window.saveListing === 'function');
+console.log('✅ openInquiryModal available:', typeof window.openInquiryModal === 'function');
 
 // Initialize
 if (document.readyState === 'loading') {
