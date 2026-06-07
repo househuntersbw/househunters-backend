@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Received Requests - HouseHunters</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .requests-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-bottom: 80px;
+        }
+        .request-card {
+            background: #1a1a1a;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid #2e2f32;
+            transition: transform 0.2s;
+        }
+        .request-card:hover {
+            transform: translateY(-2px);
+            border-color: #444;
+        }
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .request-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+        .request-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .request-type.property { background: #2196f3; color: white; }
+        .request-type.agent { background: #ff9800; color: white; }
+        .request-type.buyer { background: #4caf50; color: white; }
+        .request-type.seller { background: #9c27b0; color: white; }
+        .request-type.tenant { background: #00bcd4; color: white; }
+        .request-type.landlord { background: #795548; color: white; }
+        .request-details {
+            margin: 12px 0;
+            padding: 12px;
+            background: #0a0a0a;
+            border-radius: 12px;
+        }
+        .request-description {
+            color: #ccc;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .request-meta {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #888;
+        }
+        .request-meta i {
+            width: 18px;
+            margin-right: 4px;
+        }
+        .contact-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #2e2f32;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .contact-info span {
+            font-size: 13px;
+            color: #4caf50;
+        }
+        .contact-info i {
+            margin-right: 6px;
+        }
+        .chat-btn {
+            background: white;
+            color: black;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chat-btn:hover {
+            background: #ddd;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px;
+            border-top: 1px solid #2e2f32;
+            z-index: 100;
+        }
+        .nav-item {
+            color: #6c6f72;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+        }
+        .nav-item i {
+            font-size: 22px;
+        }
+        .nav-item.active {
+            color: white;
+        }
+        .page-header {
+            margin-bottom: 24px;
+        }
+        .page-header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .page-header p {
+            color: #888;
+        }
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            background: #2a2a2a;
+            border: none;
+            color: #888;
+            padding: 8px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .filter-btn.active {
+            background: white;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="requests-container">
+        <div class="page-header">
+            <h1>Received Requests</h1>
+            <p>Requests posted by other users</p>
+            <a href="send-request.html" class="btn-new" style="background: white; color: black; padding: 10px 20px; border-radius: 30px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 20px;"><i class="fa-solid fa-plus"></i> Post Request</a>
+        </div>
+        
+        <div class="filter-buttons">
+            <button class="filter-btn active" onclick="filterRequests('all')">All</button>
+            <button class="filter-btn" onclick="filterRequests('looking-for-property')">🔍 Property</button>
+            <button class="filter-btn" onclick="filterRequests('looking-for-agent')">🤝 Agent</button>
+            <button class="filter-btn" onclick="filterRequests('looking-for-buyer')">💰 Buyer</button>
+            <button class="filter-btn" onclick="filterRequests('looking-for-seller')">🏠 Seller</button>
+        </div>
+        
+        <div id="requestsList" class="requests-list">
+            <div class="empty-state">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <p>Loading requests...</p>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item" id="smartHomeBtn"><i class="fa-solid fa-home"></i><span>Home</span></a>
+        <a href="received-requests.html" class="nav-item active"><i class="fa-solid fa-inbox"></i><span>Received</span></a>
+        <a href="sent-requests.html" class="nav-item"><i class="fa-solid fa-paper-plane"></i><span>Sent</span></a>
+        <a href="send-request.html" class="nav-item"><i class="fa-solid fa-plus"></i><span>New</span></a>
+        <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+    </nav>
+
+    <script>
+        const API_BASE = 'https://househunters-backend-1.onrender.com/api';
+        const userEmail = localStorage.getItem('userEmail');
+        const userRole = localStorage.getItem('userRole') || 'buyer';
+        let allRequests = [];
+        let currentFilter = 'all';
+        
+        if (!userEmail) {
+            window.location.href = 'login.html';
+        }
+        
+        function getRequestTypeClass(type) {
+            const types = {
+                'looking-for-property': 'property',
+                'looking-for-agent': 'agent',
+                'looking-for-buyer': 'buyer',
+                'looking-for-seller': 'seller',
+                'looking-for-tenant': 'tenant',
+                'looking-for-landlord': 'landlord'
+            };
+            return types[type] || 'property';
+        }
+        
+        function getRequestTypeIcon(type) {
+            const icons = {
+                'looking-for-property': '🔍',
+                'looking-for-agent': '🤝',
+                'looking-for-buyer': '💰',
+                'looking-for-seller': '🏠',
+                'looking-for-tenant': '🏢',
+                'looking-for-landlord': '🏘️'
+            };
+            return icons[type] || '📝';
+        }
+        
+        function getRequestTypeDisplay(type) {
+            const displays = {
+                'looking-for-property': 'Looking for Property',
+                'looking-for-agent': 'Looking for Agent',
+                'looking-for-buyer': 'Looking for Buyer',
+                'looking-for-seller': 'Looking for Seller',
+                'looking-for-tenant': 'Looking for Tenant',
+                'looking-for-landlord': 'Looking for Landlord'
+            };
+            return displays[type] || type;
+        }
+        
+        function startChat(receiverEmail, propertyTitle) {
+            if (!userEmail) {
+                alert('Please login to chat');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            if (userEmail === receiverEmail) {
+                alert('You cannot chat with yourself');
+                return;
+            }
+            
+            localStorage.setItem('chatReceiver', receiverEmail);
+            localStorage.setItem('chatPropertyTitle', propertyTitle);
+            window.location.href = 'chat.html';
+        }
+        
+        function filterRequests(type) {
+            currentFilter = type;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            displayRequests();
+        }
+        
+        function displayRequests() {
+            const container = document.getElementById('requestsList');
+            let filtered = allRequests;
+            
+            if (currentFilter !== 'all') {
+                filtered = allRequests.filter(r => r.type === currentFilter);
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-inbox"></i>
+                        <p>No requests found.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = filtered.map(req => `
+                <div class="request-card">
+                    <div class="request-header">
+                        <h3 class="request-title">${escapeHtml(req.title)}</h3>
+                        <div>
+                            <span class="request-type ${getRequestTypeClass(req.type)}">
+                                ${getRequestTypeIcon(req.type)} ${getRequestTypeDisplay(req.type)}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="request-details">
+                        <div class="request-description">${escapeHtml(req.description)}</div>
+                        <div class="request-meta">
+                            <span><i class="fa-solid fa-user"></i> ${escapeHtml(req.contact_name || req.posted_by.split('@')[0])}</span>
+                            <span><i class="fa-solid fa-location-dot"></i> ${escapeHtml(req.location) || 'Anywhere'}</span>
+                            ${req.budget ? `<span><i class="fa-solid fa-money-bill"></i> P${parseInt(req.budget).toLocaleString()}</span>` : ''}
+                            <span><i class="fa-regular fa-calendar"></i> ${new Date(req.created_at).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                    <div class="contact-info">
+                        <span><i class="fa-regular fa-envelope"></i> ${escapeHtml(req.posted_by)}</span>
+                        ${req.contact_phone ? `<span><i class="fa-solid fa-phone"></i> ${escapeHtml(req.contact_phone)}</span>` : ''}
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <button class="chat-btn" onclick="startChat('${req.posted_by}', '${escapeHtml(req.title)}')">
+                            <i class="fa-solid fa-comment"></i> Chat with ${escapeHtml(req.contact_name || req.posted_by.split('@')[0])}
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function loadReceivedRequests() {
+            const container = document.getElementById('requestsList');
+            container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/requests`);
+                const data = await response.json();
+                let requests = data.requests || [];
+                
+                // Filter out user's own requests
+                allRequests = requests.filter(r => r.posted_by !== userEmail);
+                
+                displayRequests();
+            } catch (error) {
+                console.error('Error:', error);
+                container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-circle-exclamation"></i><p>Error loading requests</p></div>';
+            }
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+        
+        // Smart navigation
+        document.addEventListener('DOMContentLoaded', function() {
+            const homeLinks = { buyer: 'buyer.html', seller: 'seller.html', agent: 'agent.html' };
+            const homeBtn = document.getElementById('smartHomeBtn');
+            if (homeBtn) homeBtn.href = homeLinks[userRole];
+            
+            loadReceivedRequests();
+            
+            // Apply theme
+            const isDark = localStorage.getItem('darkMode') !== 'false';
+            if (isDark) {
+                document.body.style.backgroundColor = '#000000';
+            }
+        });
+        
+        // Make functions global
+        window.startChat = startChat;
+        window.filterRequests = filterRequests;
+    </script>
+</body>
+</html>

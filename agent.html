@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Agent Dashboard - HouseHunters</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="global.js"></script>
+</head>
+<body>
+    <div class="app">
+        <header class="app-header">
+            <div class="brand"><div class="logo"><i class="fa-solid fa-user-secret"></i></div><div><h1>Agent Dashboard</h1><p class="muted small">Connect buyers & sellers</p></div></div>
+        </header>
+
+        <section class="top-actions grid-4">
+            <button class="btn card" onclick="toggleModal('listingsModal', true); loadManagedListings();"><i class="fa-solid fa-layer-group"></i><span>Listings</span></button>
+            <button class="btn card" onclick="toggleModal('clientsModal', true); loadConnectedClients();"><i class="fa-solid fa-users"></i><span>Clients</span></button>
+            <button class="btn card primary" onclick="location.href='create-listing.html'"><i class="fas fa-plus"></i><span>Create</span></button>
+            <button class="btn card" onclick="toggleModal('requestModal', true)"><i class="fa-solid fa-paper-plane"></i><span>Request</span></button>
+        </section>
+
+        <main class="main-content">
+            <div class="categories">
+                <a class="cat" href="apartments.html">Apartment</a>
+                <a class="cat" href="standalone.html">Standalone</a>
+                <a class="cat" href="multires.html">Multires</a>
+                <a class="cat" href="estate.html">Estate</a>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" onclick="openTab('feed')">Properties</button>
+                <button class="tab-btn" onclick="openTab('buyersTab')">Buyers</button>
+                <button class="tab-btn" onclick="openTab('sellersTab')">Sellers</button>
+                <button class="tab-btn" onclick="openTab('inquiriesTab'); loadAgentInquiries();">Inquiries</button>
+            </div>
+
+            <section id="feed" class="tab-content"><h2>Properties</h2><div id="featuredListings" class="listings">Loading...</div></section>
+            <section id="buyersTab" class="tab-content" style="display:none;"><h2>Buyers Looking</h2><div id="buyersList" class="listings">Loading buyers...</div></section>
+            <section id="sellersTab" class="tab-content" style="display:none;"><h2>Sellers Listing</h2><div id="sellersList" class="listings">Loading sellers...</div></section>
+            <section id="inquiriesTab" class="tab-content" style="display:none;"><h2>Client Inquiries</h2><div id="agentInquiriesList" class="listings">Loading...</div></section>
+        </main>
+
+        <nav class="bottom-nav">
+            <a href="#" class="nav-item" id="smartHomeBtn"><i class="fa-solid fa-home"></i><span>Home</span></a>
+            <a href="chat.html" class="nav-item"><i class="fa-solid fa-comments"></i><span>Chat</span></a>
+            <a href="settings.html" class="nav-item"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+            <a href="received-requests.html" class="nav-item"><i class="fa-solid fa-inbox"></i><span>Requests</span></a>
+        </nav>
+    </div>
+
+    <!-- Listings Modal -->
+    <div id="listingsModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="toggleModal('listingsModal', false)">×</button>
+            <h3>My Listings</h3>
+            <div id="myListingsContainer" class="listings">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Clients Modal -->
+    <div id="clientsModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="toggleModal('clientsModal', false)">×</button>
+            <h3>My Clients</h3>
+            <div id="clientsContainer" class="listings">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Request Modal -->
+    <div id="requestModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="toggleModal('requestModal', false)">×</button>
+            <h3>Post Agent Request</h3>
+            <input id="reqTitle" placeholder="Title">
+            <textarea id="reqDesc" placeholder="Description" rows="4"></textarea>
+            <select id="reqType">
+                <option value="looking-for-sellers">Looking for Sellers</option>
+                <option value="looking-for-buyers">Looking for Buyers</option>
+            </select>
+            <input id="reqBudget" placeholder="Budget (Pula)">
+            <input id="reqLocation" placeholder="Location">
+            <div class="row">
+                <button class="btn primary" onclick="postAgentRequest()">Post</button>
+                <button class="btn ghost" onclick="toggleModal('requestModal', false)">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inquiry Modal -->
+    <div id="inquiryModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="toggleModal('inquiryModal', false)">×</button>
+            <h3>Send Inquiry</h3>
+            <p><strong>Regarding:</strong> <span id="inquiryPropertyTitle"></span></p>
+            <input type="hidden" id="inquiryPropertyId">
+            <input type="hidden" id="inquiryReceiverEmail">
+            <input type="hidden" id="inquiryReceiverRole">
+            <textarea id="inquiryMessage" rows="4" placeholder="Type your question here..." style="width:100%; margin:12px 0;"></textarea>
+            <div class="row">
+                <button class="btn primary" onclick="sendInquiry()">Send Message</button>
+                <button class="btn ghost" onclick="toggleModal('inquiryModal', false)">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const userRole = localStorage.getItem('userRole') || 'agent';
+        const homeLinks = { buyer: 'buyer.html', seller: 'seller.html', agent: 'agent.html' };
+        const homeBtn = document.getElementById('smartHomeBtn');
+        if (homeBtn) homeBtn.href = homeLinks[userRole];
+        
+        if (!localStorage.getItem('userEmail')) window.location.href = 'login.html';
+        
+        loadProperties('all', 'featuredListings');
+    });
+    </script>
+</body>
+</html>
